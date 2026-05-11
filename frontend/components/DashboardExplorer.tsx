@@ -6,9 +6,9 @@ import { MetricCard } from "@/components/MetricCard";
 import { SourceBadge } from "@/components/SourceBadge";
 import { TrendChart } from "@/components/TrendChart";
 import { ANALYSIS_START_YEAR } from "@/lib/constants";
+import { getSummary, getTimeseries } from "@/lib/api";
 import type { SummaryResponse, TerritorialUnit, Territory, TimeSeriesPoint } from "@/types/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 type DashboardTerritoryMode = "state" | "municipality";
 
 export function DashboardExplorer({
@@ -57,30 +57,10 @@ export function DashboardExplorer({
         return;
       }
 
-      const summaryParams = new URLSearchParams({
-        year: String(latestYear),
-        territory_type: territoryType,
-        territory_name: territoryName
-      });
-      const timeseriesParams = new URLSearchParams({
-        indicator: "letalidade_violenta",
-        territory_type: territoryType,
-        territory_name: territoryName,
-        start_year: String(chartStartYear),
-        end_year: String(latestYear)
-      });
-
-      const [summaryResponse, timeseriesResponse] = await Promise.all([
-        fetch(`${API_BASE}/api/summary?${summaryParams.toString()}`, { cache: "no-store" }),
-        fetch(`${API_BASE}/api/timeseries?${timeseriesParams.toString()}`, { cache: "no-store" })
+      const [nextSummary, nextTimeseries] = await Promise.all([
+        getSummary(latestYear, territoryType, territoryName),
+        getTimeseries("letalidade_violenta", territoryType, territoryName, chartStartYear, latestYear)
       ]);
-      if (!summaryResponse.ok || !timeseriesResponse.ok) {
-        throw new Error("Falha ao carregar dados oficiais do ISP.");
-      }
-      const [nextSummary, nextTimeseries] = (await Promise.all([
-        summaryResponse.json(),
-        timeseriesResponse.json()
-      ])) as [SummaryResponse, TimeSeriesPoint[]];
 
       if (!cancelled) {
         setSummary(nextSummary);

@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { TrendChart } from "@/components/TrendChart";
 import { ANALYSIS_START_YEAR } from "@/lib/constants";
+import { getTerritories, getTimeseries } from "@/lib/api";
 import type { Indicator, Territory, TerritoryType, TimeSeriesPoint } from "@/types/api";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 interface TrendsExplorerProps {
   indicators: Indicator[];
@@ -29,11 +28,7 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
   useEffect(() => {
     let cancelled = false;
     async function loadTerritories() {
-      const response = await fetch(`${API_BASE}/api/territories?territory_type=${territoryType}`, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error("Falha ao carregar territórios oficiais.");
-      }
-      const nextTerritories = (await response.json()) as Territory[];
+      const nextTerritories = await getTerritories(territoryType);
       if (cancelled) {
         return;
       }
@@ -51,18 +46,7 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
     async function loadSeries() {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams({
-        indicator,
-        territory_type: territoryType,
-        territory_name: territoryName,
-        start_year: String(startYear),
-        end_year: String(endYear)
-      });
-      const response = await fetch(`${API_BASE}/api/timeseries?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error("Falha ao carregar série oficial do ISP.");
-      }
-      const nextData = (await response.json()) as TimeSeriesPoint[];
+      const nextData = await getTimeseries(indicator, territoryType, territoryName, startYear, endYear);
       if (!cancelled) {
         setData(nextData);
       }

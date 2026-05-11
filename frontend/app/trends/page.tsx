@@ -2,8 +2,6 @@ import { TrendsExplorer } from "@/components/TrendsExplorer";
 import { ANALYSIS_START_YEAR } from "@/lib/constants";
 import { getIndicators, getTerritories, getTimeseries } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
 export default async function TrendsPage() {
   const [indicators, territories, timeseries] = await Promise.all([
     getIndicators(),

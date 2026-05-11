@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { RankingTable } from "@/components/RankingTable";
 import { ANALYSIS_START_YEAR } from "@/lib/constants";
+import { getRankings } from "@/lib/api";
 import type { Indicator, RankingMode, RankingRow } from "@/types/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 type RankingTerritoryType = "municipality" | "police_area";
 type SortKey = "value" | "variation";
 type SortDirection = "asc" | "desc";
@@ -27,18 +27,7 @@ export function RankingsExplorer({ indicators, initialRows }: { indicators: Indi
     async function loadRankings() {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams({
-        indicator,
-        year: String(year),
-        month: String(month),
-        territory_type: territoryType,
-        mode
-      });
-      const response = await fetch(`${API_BASE}/api/rankings?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error("Falha ao carregar ranking oficial do ISP.");
-      }
-      const nextRows = (await response.json()) as RankingRow[];
+      const nextRows = await getRankings(indicator, mode, territoryType, year, month);
       if (!cancelled) {
         setRows(sortKey ? sortRows(nextRows, sortKey, sortDirection) : nextRows);
       }

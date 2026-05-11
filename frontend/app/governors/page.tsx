@@ -2,8 +2,6 @@ import { GovernorsPerformanceTable } from "@/components/GovernorsPerformanceTabl
 import { SourceBadge } from "@/components/SourceBadge";
 import { getGovernorPerformance } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
 export default async function GovernorsPage() {
   const performance = await getGovernorPerformance();
 
