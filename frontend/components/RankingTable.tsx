@@ -31,8 +31,8 @@ export function RankingTable({
 }) {
   const sortable = Boolean(onSort);
   return (
-    <div className="overflow-x-auto border border-border bg-surface shadow-hard">
-      <table className="min-w-[760px] divide-y divide-border text-sm">
+    <div className="w-full overflow-x-auto border border-border bg-surface shadow-hard">
+      <table className="w-full min-w-[760px] divide-y divide-border text-sm">
         <thead className="bg-background text-left font-mono text-xs font-bold uppercase tracking-wide text-muted">
           <tr>
             <th className="px-4 py-3">Rank</th>
