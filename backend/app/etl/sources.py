@@ -33,12 +33,6 @@ def default_isp_sources() -> list[IspSource]:
             file_name="BaseMunicipioMensal.csv",
         ),
         IspSource(
-            name="isp_feminicide_police_area",
-            url=f"{base}/BaseFeminicidioEvolucaoMensalCisp.csv",
-            territory_type="police_area",
-            file_name="BaseFeminicidioEvolucaoMensalCisp.csv",
-        ),
-        IspSource(
             name="isp_weapons_police_area",
             url=f"{base}/ArmasApreendidasEvolucaoCisp.csv",
             territory_type="police_area",
