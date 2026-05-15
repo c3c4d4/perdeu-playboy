@@ -61,17 +61,8 @@ function collectCoordinates(geometry: Geometry | null | undefined): number[][] {
 }
 
 function color(value: number, max: number, indicator: MapIndicator, mode: RankingMode) {
-  if (indicator === "crime_geral") {
-    const intensity = Math.max(0, Math.min(1, value / Math.max(max, 1)));
-    return `rgb(${46 + Math.round(178 * intensity)}, ${18 + Math.round(34 * (1 - intensity))}, ${18 + Math.round(34 * (1 - intensity))})`;
-  }
-  if (mode === "yoy" && value > 0) {
-    const intensity = Math.max(0, Math.min(1, value / Math.max(max, 1)));
-    return `rgb(${120 + Math.round(104 * intensity)}, ${24 + Math.round(20 * (1 - intensity))}, ${24 + Math.round(20 * (1 - intensity))})`;
-  }
   const intensity = Math.max(0, Math.min(1, value / Math.max(max, 1)));
-  const shade = 42 + Math.round(178 * intensity);
-  return `rgb(${shade}, ${shade}, ${shade})`;
+  return `rgb(${36 + Math.round(196 * intensity)}, ${14 + Math.round(28 * (1 - intensity))}, ${14 + Math.round(28 * (1 - intensity))})`;
 }
 
 function periodsUntil(latestYear: number, latestMonth: number) {
@@ -130,6 +121,7 @@ export function MunicipalityChoroplethPanel({
   const periods = useMemo(() => periodsUntil(latestYear, latestMonth), [latestMonth, latestYear]);
   const initialState = useMemo(() => initialMapState(periods), [periods]);
   const [indicator, setIndicator] = useState<MapIndicator>(initialState.indicator);
+  const [indicatorOptions, setIndicatorOptions] = useState(indicators);
   const [mode, setMode] = useState<RankingMode>(initialState.mode);
   const [periodIndex, setPeriodIndex] = useState(initialState.periodIndex);
   const [view, setView] = useState<MapView>(initialState.view);
@@ -168,11 +160,7 @@ export function MunicipalityChoroplethPanel({
     function handleUfChange(event: Event) {
       const detail = (event as CustomEvent<{ uf?: string }>).detail;
       const nextUf = enabledUf(detail?.uf);
-      setUf(nextUf);
-      setView("state");
-      setSelected(null);
-      setError(null);
-      void loadMap("state", periodIndex, indicator, mode, nextUf);
+      void reloadUf(nextUf);
     }
     window.addEventListener("ufchange", handleUfChange);
     return () => window.removeEventListener("ufchange", handleUfChange);
@@ -215,6 +203,30 @@ export function MunicipalityChoroplethPanel({
       }
       setData(nextData);
       setSelected(null);
+    } catch {
+      setError("Falha ao carregar mapa.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function reloadUf(nextUf: UfCode) {
+    setLoading(true);
+    setError(null);
+    try {
+      const { getIndicators } = await import("@/lib/api");
+      const nextIndicators = await getIndicators(nextUf);
+      const nextIndicator = indicator === "crime_geral" || nextIndicators.some((item) => item.code === indicator)
+        ? indicator
+        : nextIndicators[0]?.code ?? "crime_geral";
+      const nextPeriodIndex = clampPeriodToStart(periodIndex, "state", nextUf, periods);
+      setUf(nextUf);
+      setView("state");
+      setSelected(null);
+      setIndicatorOptions(nextIndicators);
+      setIndicator(nextIndicator);
+      setPeriodIndex(nextPeriodIndex);
+      await loadMap("state", nextPeriodIndex, nextIndicator, nextIndicator === "crime_geral" ? "rate" : mode, nextUf);
     } catch {
       setError("Falha ao carregar mapa.");
     } finally {
@@ -273,7 +285,7 @@ export function MunicipalityChoroplethPanel({
 
   return (
     <section className="grid gap-4">
-      <div className="grid gap-4 border border-border bg-surface p-5 shadow-hard md:grid-cols-3">
+      <div className="grid gap-4 border border-border bg-surface p-5 shadow-hard md:grid-cols-2">
         <label className="grid gap-2 font-mono text-xs font-bold uppercase tracking-widest text-muted">
           Indicador
           <select
@@ -282,7 +294,7 @@ export function MunicipalityChoroplethPanel({
             onChange={(event) => changeIndicator(event.target.value)}
           >
             <option value="crime_geral">CRIME GERAL</option>
-            {indicators.map((item) => (
+            {indicatorOptions.map((item) => (
               <option key={item.code} value={item.code}>
                 {item.code === "letalidade_violenta" ? "LETALIDADE GERAL" : item.name.toUpperCase()}
               </option>
@@ -304,14 +316,14 @@ export function MunicipalityChoroplethPanel({
           </select>
         </label>
 
-        <div className="flex items-end justify-between gap-3 font-mono text-xs uppercase tracking-widest text-muted">
-          <span>{loading ? "Carregando mapa..." : error ?? (view === "rio_city" ? `Bairros: ${data.features.length}` : `Municípios: ${data.features.length}`)}</span>
-          {view === "rio_city" ? (
+        {view === "rio_city" ? (
+          <div className="flex items-end justify-end gap-3 font-mono text-xs uppercase tracking-widest text-muted md:col-span-2">
             <button type="button" className="border border-border px-3 py-2 text-foreground hover:border-foreground" onClick={backToState}>
               Voltar
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
+        {error ? <p className="font-mono text-xs uppercase tracking-widest text-accent-red md:col-span-2">{error}</p> : null}
       </div>
 
       <div className="overflow-hidden border border-border bg-surface p-4 shadow-hard">
@@ -415,4 +427,19 @@ function viewStartYear(view: MapView, uf: UfCode = "RJ") {
     return 2015;
   }
   return view === "rio_city" ? 2003 : 2014;
+}
+
+function clampPeriodToStart(
+  periodIndex: number,
+  view: MapView,
+  uf: UfCode,
+  periods: Array<{ year: number; month: number }>
+) {
+  const period = periods[periodIndex];
+  const startYear = viewStartYear(view, uf);
+  if (period && period.year >= startYear) {
+    return periodIndex;
+  }
+  const startIndex = periods.findIndex((item) => item.year === startYear && item.month === 1);
+  return startIndex >= 0 ? startIndex : Math.max(0, periods.length - 1);
 }

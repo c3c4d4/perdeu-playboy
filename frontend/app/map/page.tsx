@@ -1,5 +1,3 @@
-import { CoverageNotice } from "@/components/CoverageNotice";
-import { MethodologyDrawer } from "@/components/MethodologyDrawer";
 import { MunicipalityChoroplethPanel } from "@/components/MunicipalityChoroplethPanel";
 import { SourceBadge } from "@/components/SourceBadge";
 import { getIndicators, getLatestPeriod, getMapData } from "@/lib/api";
@@ -18,23 +16,11 @@ export default async function MapPage() {
         <SourceBadge label="ISP / SSP-SP / Sinesp + IBGE" />
       </section>
 
-      <CoverageNotice>
-        Cobertura do mapa: RJ municípios começam em 2014; ao clicar em Rio de Janeiro, bairros usam dados CISP desde 2003. SP municípios começam em 2015 e não têm drilldown por bairro nesta versão.
-      </CoverageNotice>
-
       <MunicipalityChoroplethPanel
         indicators={indicators}
         initialData={mapData}
         latestYear={latest.year}
         latestMonth={latest.month}
-      />
-
-      <MethodologyDrawer
-        csvs={["BaseMunicipioMensal.csv", "BaseDPEvolucaoMensalCisp.csv", "Relacao_RISPxAISPxCISP.csv", "SSP-SP API mensal", "Sinesp VDE", "malhas IBGE", "Data.Rio bairros/população 2022"]}
-        columns={["ano", "mes", "indicador selecionado", "fmun/cisp", "geometry", "population"]}
-        period="Mês selecionado na linha do tempo."
-        formula="Indicadores oficiais usam valor acumulado até o mês; crime geral usa soma móvel de 12 meses por 100 mil habitantes."
-        limits={["Município do Rio abre CISP/bairros em camada separada.", "Bairros herdam valores da CISP correspondente.", "Alguns bairros novos podem não casar perfeitamente com a tabela CISP."]}
       />
     </div>
   );

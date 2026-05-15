@@ -1,6 +1,4 @@
 import { ExternalLink } from "lucide-react";
-import { CoverageNotice } from "@/components/CoverageNotice";
-import { MethodologyDrawer } from "@/components/MethodologyDrawer";
 import { getDataSources, getSnapshotMeta } from "@/lib/api";
 
 function formatDate(value: string) {
@@ -56,10 +54,6 @@ export default async function SourcesPage() {
         </div>
       </section>
 
-      <CoverageNotice>
-        O snapshot é estático e versionado no repositório. A atualização automática roda semanalmente quando o workflow do GitHub Actions está habilitado e também pode ser acionada manualmente.
-      </CoverageNotice>
-
       <section className="overflow-x-auto border border-border bg-surface shadow-hard">
         <table className="min-w-[920px] divide-y divide-border text-sm">
           <thead className="bg-background text-left font-mono text-xs font-bold uppercase tracking-wide text-muted">
@@ -95,14 +89,6 @@ export default async function SourcesPage() {
           </tbody>
         </table>
       </section>
-
-      <MethodologyDrawer
-        csvs={sources.map((source) => source.file_name)}
-        columns={["checksum_sha256", "size_bytes", "generated_at", "latest_period"]}
-        period={`Snapshot gerado em ${formatDate(snapshot.generated_at)}`}
-        formula="Cada arquivo local carregado recebe SHA-256 e tamanho; o frontend publica o snapshot estático gerado pela ETL."
-        limits={["O ISP pode revisar arquivos históricos.", "Arquivos indisponíveis não entram no snapshot.", "A data de geração não é necessariamente a data de publicação do ISP."]}
-      />
     </div>
   );
 }

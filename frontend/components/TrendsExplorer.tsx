@@ -14,6 +14,7 @@ interface TrendsExplorerProps {
 
 export function TrendsExplorer({ indicators, initialTerritories, initialData }: TrendsExplorerProps) {
   const [indicator, setIndicator] = useState("roubo_rua");
+  const [indicatorOptions, setIndicatorOptions] = useState(indicators);
   const [uf, setUf] = useState<UfCode>("RJ");
   const [territoryType, setTerritoryType] = useState<TerritoryType>("state");
   const [territoryName, setTerritoryName] = useState("Estado do Rio de Janeiro");
@@ -36,12 +37,16 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
         return;
       }
       const { getTerritories } = await import("@/lib/api");
-      const nextTerritories = await getTerritories(territoryType, uf);
+      const nextType = uf === "SP" && territoryType === "police_area" ? "municipality" : territoryType;
+      const nextTerritories = await getTerritories(nextType, uf);
       if (cancelled) {
         return;
       }
+      if (nextType !== territoryType) {
+        setTerritoryType(nextType);
+      }
       setTerritories(nextTerritories);
-      setTerritoryName(nextTerritories[0]?.name ?? "");
+      setTerritoryName(preferredTerritoryName(uf, nextType, nextTerritories));
     }
     loadTerritories().catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao carregar territórios."));
     return () => {
@@ -100,14 +105,18 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
     setLoading(true);
     setError(null);
     try {
-      const { getLatestPeriod, getTerritories, getTimeseries } = await import("@/lib/api");
-      const [latest, nextTerritories] = await Promise.all([
+      const { getIndicators, getLatestPeriod, getTerritories, getTimeseries } = await import("@/lib/api");
+      const [latest, nextTerritories, nextIndicators] = await Promise.all([
         getLatestPeriod(nextUf),
-        getTerritories("state", nextUf)
+        getTerritories("state", nextUf),
+        getIndicators(nextUf)
       ]);
       const stateName = nextTerritories[0]?.name ?? (nextUf === "SP" ? "Estado de São Paulo" : "Estado do Rio de Janeiro");
       const nextStart = Math.max(ANALYSIS_START_YEAR, nextUf === "SP" ? 2015 : ANALYSIS_START_YEAR);
-      const nextData = await getTimeseries(indicator, "state", stateName, nextStart, latest.year, nextUf);
+      const nextIndicator = nextIndicators.some((item) => item.code === indicator) ? indicator : nextIndicators[0]?.code ?? "letalidade_violenta";
+      const nextData = await getTimeseries(nextIndicator, "state", stateName, nextStart, latest.year, nextUf);
+      setIndicatorOptions(nextIndicators);
+      setIndicator(nextIndicator);
       setTerritories(nextTerritories);
       setTerritoryName(stateName);
       setStartYear(nextStart);
@@ -130,7 +139,7 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
             value={indicator}
             onChange={(event) => setIndicator(event.target.value)}
           >
-            {indicators.map((item) => (
+            {indicatorOptions.map((item) => (
               <option key={item.code} value={item.code}>
                 {item.name.toUpperCase()}
               </option>
@@ -148,7 +157,7 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
             >
               <option value="state">ESTADO</option>
               <option value="municipality">MUNICÍPIO</option>
-              <option value="police_area" disabled={uf !== "RJ"}>ÁREA POLICIAL</option>
+              {uf === "RJ" ? <option value="police_area">ÁREA POLICIAL</option> : null}
             </select>
           </label>
 
@@ -202,4 +211,15 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
       <TrendChart data={data} />
     </div>
   );
+}
+
+function preferredTerritoryName(uf: UfCode, territoryType: TerritoryType, territories: Territory[]) {
+  if (territoryType === "state") {
+    return territories[0]?.name ?? (uf === "SP" ? "Estado de São Paulo" : "Estado do Rio de Janeiro");
+  }
+  if (territoryType === "municipality") {
+    const preferred = uf === "SP" ? "São Paulo" : "Rio de Janeiro";
+    return territories.find((territory) => territory.name === preferred)?.name ?? territories[0]?.name ?? "";
+  }
+  return territories[0]?.name ?? "";
 }

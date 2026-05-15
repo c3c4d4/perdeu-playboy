@@ -29,12 +29,13 @@ test("map accepts permalink filters", async ({ page }) => {
   await expect(page.locator("body")).toBeVisible();
   await expect(page.getByLabel("Indicador")).toHaveValue("crime_geral");
   await expect(page.locator("text=12/2024")).toBeVisible();
-  await expect(page.locator("text=Bairros:")).toBeVisible();
+  await expect(page.locator("text=Bairros:")).toHaveCount(0);
+  await expect(page.locator("text=Voltar")).toBeVisible();
 });
 
 test("map loads Sao Paulo official snapshot", async ({ page }) => {
   await page.goto("/map?uf=SP");
   await expect(page.getByLabel("Selecionar UF")).toHaveValue("SP");
-  await expect(page.locator("text=Municípios: 645")).toBeVisible();
+  await expect(page.locator("text=Municípios: 645")).toHaveCount(0);
   await expect(page.locator("text=Falha ao carregar mapa")).toHaveCount(0);
 });

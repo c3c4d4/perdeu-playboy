@@ -1,5 +1,3 @@
-import { CoverageNotice } from "@/components/CoverageNotice";
-import { MethodologyDrawer } from "@/components/MethodologyDrawer";
 import { SourceBadge } from "@/components/SourceBadge";
 import { getIndicators } from "@/lib/api";
 
@@ -43,10 +41,6 @@ export default async function GlossaryPage() {
         <SourceBadge label="Definições ISP" />
       </section>
 
-      <CoverageNotice>
-        As definições abaixo resumem a leitura operacional dos indicadores no painel. Para uso jurídico ou técnico, a referência final é o dicionário/metodologia oficial do ISP.
-      </CoverageNotice>
-
       <section className="grid gap-4 md:grid-cols-2">
         {differences.map((item) => (
           <article key={item.title} className="border border-border bg-surface p-5 shadow-hard">
@@ -78,14 +72,6 @@ export default async function GlossaryPage() {
           </tbody>
         </table>
       </section>
-
-      <MethodologyDrawer
-        csvs={["DOMensalEstadoDesde1991.csv", "BaseDPEvolucaoMensalCisp.csv", "BaseMunicipioMensal.csv"]}
-        columns={indicators.map((indicator) => indicator.code)}
-        period="Cobertura varia por nível territorial: estado desde 2000 no painel, CISP desde 2003 e município desde 2014."
-        formula="O painel normaliza colunas oficiais para códigos internos estáveis e mantém os nomes oficiais em português na UI."
-        limits={["Resumo não substitui documentação oficial do ISP.", "Algumas categorias são agregados.", "Mudanças de classificação ao longo do tempo podem afetar comparabilidade."]}
-      />
     </div>
   );
 }

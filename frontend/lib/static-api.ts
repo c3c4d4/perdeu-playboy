@@ -44,8 +44,17 @@ type StateSnapshot = Omit<StaticSnapshot, "generated_at" | "analysis_start_year"
 
 const DATA = snapshot as StaticSnapshot;
 const CRIME_RATE_INDICATORS = ["letalidade_violenta", "roubo_rua", "roubo_veiculo", "roubo_carga", "estupro"];
+const GOVERNOR_INDICATORS = ["letalidade_violenta", "homicidio_doloso", "latrocinio", "roubo_veiculo", "roubo_carga"];
 const rankingCache = new Map<string, RankingRow[]>();
 const mapCache = new Map<string, GeoFeatureCollection>();
+
+const SP_GOVERNOR_TERMS = [
+  { governor: "Geraldo Alckmin", party_or_condition: "PSDB", term_start: "2015-01-01", term_end: "2018-04-06" },
+  { governor: "Márcio França", party_or_condition: "PSB", term_start: "2018-04-06", term_end: "2018-12-31" },
+  { governor: "João Doria", party_or_condition: "PSDB", term_start: "2019-01-01", term_end: "2022-03-31" },
+  { governor: "Rodrigo Garcia", party_or_condition: "PSDB", term_start: "2022-03-31", term_end: "2022-12-31" },
+  { governor: "Tarcísio de Freitas", party_or_condition: "Republicanos", term_start: "2023-01-01", term_end: null }
+];
 
 function stateData(uf?: string): StateSnapshot {
   const code = enabledUf(uf);
@@ -53,7 +62,8 @@ function stateData(uf?: string): StateSnapshot {
 }
 
 export async function getIndicators(uf?: string): Promise<Indicator[]> {
-  return stateData(uf).indicators;
+  const data = stateData(uf);
+  return indicatorsWithData(data);
 }
 
 export async function getLatestPeriod(uf?: string): Promise<StaticSnapshot["latest_period"]> {
@@ -73,7 +83,7 @@ export async function getDataSources(uf?: string): Promise<DataSource[]> {
 }
 
 export async function getTerritories(territoryType: TerritoryType, uf?: string): Promise<Territory[]> {
-  return stateData(uf).territories[territoryType] ?? [];
+  return (stateData(uf).territories[territoryType] ?? []).filter((territory) => !isIgnoredTerritory(territory.name));
 }
 
 export async function getTerritorialUnits(municipality = "Rio de Janeiro", uf?: string): Promise<TerritorialUnit[]> {
@@ -91,7 +101,7 @@ export async function getSummary(
   const latest = data.latest_period;
   const latestMonth = year === latest.year ? latest.month : 12;
   const resolvedName = resolveTerritoryName(territoryType, territoryName, data);
-  const cards = data.indicators.map((indicator): SummaryCardData => {
+  const cards = indicatorsWithData(data).map((indicator): SummaryCardData => {
     const values = valuesFor(indicator.code, territoryType, resolvedName, data);
     const current = ytd(values, year, latestMonth);
     const previous = ytd(values, year - 1, latestMonth);
@@ -176,7 +186,7 @@ export async function getRankings(
   if (cached) {
     return cached;
   }
-  const names = Object.keys(data.series[indicator]?.[territoryType] ?? {});
+  const names = Object.keys(data.series[indicator]?.[territoryType] ?? {}).filter((name) => !isIgnoredTerritory(name));
   const rows = names.map((name): RankingRow => {
     const values = valuesFor(indicator, territoryType, name, data);
     const value = ytd(values, year, month);
@@ -194,13 +204,18 @@ export async function getRankings(
     };
   });
 
-  rows.sort((a, b) => rankingValue(b, mode) - rankingValue(a, mode));
-  const rankedRows = rows.map((row, index) => ({ ...row, rank: index + 1 }));
+  const visibleRows = rows.filter((row) => row.value > 0 || (row.rate_per_100k ?? 0) > 0 || row.yoy_absolute_change !== 0);
+  visibleRows.sort((a, b) => rankingValue(b, mode) - rankingValue(a, mode));
+  const rankedRows = visibleRows.map((row, index) => ({ ...row, rank: index + 1 }));
   rankingCache.set(cacheKey, rankedRows);
   return rankedRows;
 }
 
-export async function getGovernorPerformance(): Promise<GovernorPerformanceResponse> {
+export async function getGovernorPerformance(uf?: string): Promise<GovernorPerformanceResponse> {
+  const code = enabledUf(uf);
+  if (code === "SP") {
+    return governorPerformanceForState(stateData("SP"), SP_GOVERNOR_TERMS);
+  }
   return DATA.governor_performance;
 }
 
@@ -331,16 +346,25 @@ export async function getRioCityCrimeRateMapData(
   return collection;
 }
 
-export async function getLatestChanges(): Promise<LatestChangesResponse> {
-  const latest = DATA.latest_period;
+export async function getLatestChanges(uf?: string): Promise<LatestChangesResponse> {
+  const data = stateData(uf);
+  const code = enabledUf(uf);
+  const latest = data.latest_period;
+  const sections =
+    code === "RJ"
+      ? [
+          changeSection("Municípios com maior piora", "municipality", "increase", latest.year, latest.month, data),
+          changeSection("Municípios com maior queda", "municipality", "decrease", latest.year, latest.month, data),
+          changeSection("CISPs com maior piora", "police_area", "increase", latest.year, latest.month, data),
+          changeSection("CISPs com maior queda", "police_area", "decrease", latest.year, latest.month, data)
+        ]
+      : [
+          changeSection("Municípios com maior piora", "municipality", "increase", latest.year, latest.month, data),
+          changeSection("Municípios com maior queda", "municipality", "decrease", latest.year, latest.month, data)
+        ];
   return {
     latest_period: latest,
-    sections: [
-      changeSection("Municípios com maior piora", "municipality", "increase", latest.year, latest.month),
-      changeSection("Municípios com maior queda", "municipality", "decrease", latest.year, latest.month),
-      changeSection("CISPs com maior piora", "police_area", "increase", latest.year, latest.month),
-      changeSection("CISPs com maior queda", "police_area", "decrease", latest.year, latest.month)
-    ]
+    sections
   };
 }
 
@@ -349,15 +373,16 @@ function changeSection(
   territoryType: Exclude<TerritoryType, "state">,
   direction: "increase" | "decrease",
   year: number,
-  month: number
+  month: number,
+  data: StateSnapshot = DATA
 ) {
   const periodIndex = monthIndex(year, month);
   const previousIndex = monthIndex(year - 1, month);
-  const names = Object.keys(DATA.series.letalidade_violenta?.[territoryType] ?? {});
+  const names = Object.keys(data.series.letalidade_violenta?.[territoryType] ?? {}).filter((name) => !isIgnoredTerritory(name));
   const rows = names
     .map((name) => {
-      const currentValue = rollingCrimeValue(territoryType, name, periodIndex);
-      const previousValue = rollingCrimeValue(territoryType, name, previousIndex);
+      const currentValue = rollingCrimeValue(territoryType, name, periodIndex, data);
+      const previousValue = rollingCrimeValue(territoryType, name, previousIndex, data);
       const absoluteChange = round1(currentValue - previousValue);
       return {
         rank: 0,
@@ -451,6 +476,107 @@ function rankFeatures(features: GeoFeatureCollection["features"]) {
   ranked.forEach((feature, index) => {
     feature.properties.rank = Number(feature.properties.metric_value ?? 0) > 0 ? index + 1 : null;
   });
+}
+
+function indicatorsWithData(data: StateSnapshot): Indicator[] {
+  return data.indicators.filter((indicator) => indicatorHasData(indicator.code, data));
+}
+
+function governorPerformanceForState(
+  data: StateSnapshot,
+  terms: Array<{ governor: string; party_or_condition: string; term_start: string; term_end: string | null }>
+): GovernorPerformanceResponse {
+  const stateName = resolveTerritoryName("state", undefined, data);
+  const rows = terms.map((term) => {
+    const startIndex = monthIndexFromDate(term.term_start);
+    const endIndex = term.term_end ? monthIndexFromDate(term.term_end) : monthIndex(data.latest_period.year, data.latest_period.month);
+    const boundedStart = Math.max(0, startIndex);
+    const boundedEnd = Math.min(endIndex, monthIndex(data.latest_period.year, data.latest_period.month));
+    const currentValues = GOVERNOR_INDICATORS.map((indicator) => {
+      const values = data.series[indicator]?.state?.[stateName] ?? [];
+      return annualizedSlice(values, boundedStart, boundedEnd);
+    });
+    const baselineStart = Math.max(0, boundedStart - 12);
+    const baselineEnd = boundedStart - 1;
+    const baselineValues = GOVERNOR_INDICATORS.map((indicator) => {
+      const values = data.series[indicator]?.state?.[stateName] ?? [];
+      return annualizedSlice(values, baselineStart, baselineEnd);
+    });
+    const reductions = currentValues
+      .map((currentValue, index) => {
+        const baselineValue = baselineValues[index];
+        if (baselineValue === null || currentValue === null || baselineValue <= 0) {
+          return null;
+        }
+        return round1(((baselineValue - currentValue) / baselineValue) * 100);
+      })
+      .filter((value): value is number => value !== null);
+    const indicatorResults = GOVERNOR_INDICATORS.map((indicator, index) => ({
+      indicator,
+      reduction: baselineValues[index] && currentValues[index] !== null && baselineValues[index]! > 0
+        ? round1(((baselineValues[index]! - currentValues[index]!) / baselineValues[index]!) * 100)
+        : null
+    })).filter((item): item is { indicator: string; reduction: number } => item.reduction !== null);
+    const rankedIndicators = [...indicatorResults].sort((a, b) => b.reduction - a.reduction);
+    const monthsCount = boundedEnd >= boundedStart ? boundedEnd - boundedStart + 1 : 0;
+    const baselineMonthsCount = baselineEnd >= baselineStart ? baselineEnd - baselineStart + 1 : 0;
+    return {
+      rank: null,
+      governor: term.governor,
+      party_or_condition: term.party_or_condition,
+      term_start: term.term_start,
+      term_end: term.term_end,
+      months_count: monthsCount,
+      baseline_months_count: baselineMonthsCount,
+      average_reduction_percent: reductions.length ? round1(reductions.reduce((sum, value) => sum + value, 0) / reductions.length) : null,
+      annualized_current_value: sumNullable(currentValues),
+      annualized_baseline_value: sumNullable(baselineValues),
+      best_indicator: rankedIndicators[0]?.indicator ?? null,
+      worst_indicator: rankedIndicators[rankedIndicators.length - 1]?.indicator ?? null,
+      note: reductions.length ? null : "sem base anterior"
+    };
+  });
+  const ranked = [...rows]
+    .sort((a, b) => (b.average_reduction_percent ?? Number.NEGATIVE_INFINITY) - (a.average_reduction_percent ?? Number.NEGATIVE_INFINITY))
+    .map((row, index) => ({ ...row, rank: row.average_reduction_percent === null ? null : index + 1 }));
+  return {
+    methodology: "Comparação descritiva por mandato com dados oficiais disponíveis para a UF selecionada.",
+    indicators: GOVERNOR_INDICATORS,
+    rows: ranked
+  };
+}
+
+function annualizedSlice(values: number[], startIndex: number, endIndex: number): number | null {
+  if (startIndex < 0 || endIndex < startIndex) {
+    return null;
+  }
+  const slice = values.slice(startIndex, endIndex + 1).filter((value) => Number.isFinite(value));
+  if (slice.length === 0) {
+    return null;
+  }
+  const total = slice.reduce((sum, value) => sum + value, 0);
+  return round1((total / slice.length) * 12);
+}
+
+function sumNullable(values: Array<number | null>): number | null {
+  const available = values.filter((value): value is number => value !== null);
+  return available.length ? round1(available.reduce((sum, value) => sum + value, 0)) : null;
+}
+
+function monthIndexFromDate(value: string): number {
+  const [year, month] = value.slice(0, 7).split("-").map(Number);
+  return monthIndex(year, month);
+}
+
+function indicatorHasData(indicator: string, data: StateSnapshot): boolean {
+  const byTerritoryType = data.series[indicator] ?? {};
+  return Object.values(byTerritoryType).some((byName) =>
+    Object.entries(byName).some(([name, values]) => !isIgnoredTerritory(name) && values.some((value) => Number(value) > 0))
+  );
+}
+
+function isIgnoredTerritory(name: string) {
+  return name.trim().localeCompare("Não Informado", "pt-BR", { sensitivity: "base" }) === 0;
 }
 
 function valuesFor(indicator: string, territoryType: TerritoryType, territoryName?: string, data: StateSnapshot = DATA): number[] {

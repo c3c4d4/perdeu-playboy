@@ -8,7 +8,7 @@ function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value);
 }
 
-type SortKey = "value" | "variation";
+type SortKey = "territory" | "value" | "trend" | "variation";
 type SortDirection = "asc" | "desc";
 
 function SortIcon({ active, direction }: { active: boolean; direction: SortDirection }) {
@@ -36,7 +36,17 @@ export function RankingTable({
         <thead className="bg-background text-left font-mono text-xs font-bold uppercase tracking-wide text-muted">
           <tr>
             <th className="px-4 py-3">Rank</th>
-            <th className="px-4 py-3">Território</th>
+            <th className="px-4 py-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 uppercase hover:text-foreground disabled:hover:text-muted"
+                disabled={!sortable}
+                onClick={() => onSort?.("territory")}
+              >
+                Território
+                <SortIcon active={sortKey === "territory"} direction={sortDirection ?? "desc"} />
+              </button>
+            </th>
             <th className="px-4 py-3 text-right">
               <button
                 type="button"
@@ -49,7 +59,17 @@ export function RankingTable({
               </button>
             </th>
             <th className="px-4 py-3 text-right">Taxa 100 mil</th>
-            <th className="px-4 py-3 text-right">Semáforo</th>
+            <th className="px-4 py-3 text-right">
+              <button
+                type="button"
+                className="ml-auto inline-flex items-center gap-1 uppercase hover:text-foreground disabled:hover:text-muted"
+                disabled={!sortable}
+                onClick={() => onSort?.("trend")}
+              >
+                Semáforo
+                <SortIcon active={sortKey === "trend"} direction={sortDirection ?? "desc"} />
+              </button>
+            </th>
             <th className="px-4 py-3 text-right">
               <button
                 type="button"

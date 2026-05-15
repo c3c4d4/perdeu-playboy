@@ -6,7 +6,7 @@ import { ANALYSIS_START_YEAR } from "@/lib/constants";
 import { enabledUf, type UfCode } from "@/lib/ufs";
 import type { Indicator, RankingMode, RankingRow } from "@/types/api";
 
-type SortKey = "value" | "variation";
+type SortKey = "territory" | "value" | "trend" | "variation";
 type SortDirection = "asc" | "desc";
 
 export function RankingsExplorer({
@@ -19,6 +19,7 @@ export function RankingsExplorer({
   initialPoliceAreaRows: RankingRow[];
 }) {
   const [indicator, setIndicator] = useState("letalidade_violenta");
+  const [indicatorOptions, setIndicatorOptions] = useState(indicators);
   const [uf, setUf] = useState<UfCode>("RJ");
   const [mode, setMode] = useState<RankingMode>("count");
   const [year, setYear] = useState(2026);
@@ -83,12 +84,15 @@ export function RankingsExplorer({
     setLoading(true);
     setError(null);
     try {
-      const { getLatestPeriod, getRankings } = await import("@/lib/api");
-      const latest = await getLatestPeriod(nextUf);
+      const { getIndicators, getLatestPeriod, getRankings } = await import("@/lib/api");
+      const [latest, nextIndicators] = await Promise.all([getLatestPeriod(nextUf), getIndicators(nextUf)]);
+      const nextIndicator = nextIndicators.some((item) => item.code === indicator) ? indicator : nextIndicators[0]?.code ?? "letalidade_violenta";
       const [nextMunicipalityRows, nextPoliceAreaRows] = await Promise.all([
-        getRankings(indicator, mode, "municipality", latest.year, latest.month, nextUf),
-        nextUf === "RJ" ? getRankings(indicator, mode, "police_area", latest.year, latest.month, nextUf) : Promise.resolve([])
+        getRankings(nextIndicator, mode, "municipality", latest.year, latest.month, nextUf),
+        nextUf === "RJ" ? getRankings(nextIndicator, mode, "police_area", latest.year, latest.month, nextUf) : Promise.resolve([])
       ]);
+      setIndicatorOptions(nextIndicators);
+      setIndicator(nextIndicator);
       setYear(latest.year);
       setMonth(latest.month);
       setMunicipalityRows(sortKey ? sortRows(nextMunicipalityRows, sortKey, sortDirection) : nextMunicipalityRows);
@@ -114,7 +118,7 @@ export function RankingsExplorer({
         <label className="grid gap-2 font-mono text-xs font-bold uppercase tracking-widest text-muted min-w-0">
           Indicador
           <select className="h-10 border border-border bg-surface px-3 text-sm text-foreground" value={indicator} onChange={(event) => setIndicator(event.target.value)}>
-            {indicators.map((item) => (
+            {indicatorOptions.map((item) => (
               <option key={item.code} value={item.code}>
                 {item.code === "letalidade_violenta" ? "LETALIDADE GERAL" : item.name.toUpperCase()}
               </option>
@@ -147,7 +151,7 @@ export function RankingsExplorer({
       </section>
 
       <div className="flex min-h-6 items-center justify-between gap-4 font-mono text-xs uppercase tracking-widest text-muted">
-        <span>{loading ? "Carregando ranking oficial..." : `${municipalityRows.length} municípios${uf === "RJ" ? ` / ${policeAreaRows.length} CISPs` : " / sem CISP"}`}</span>
+        <span>{loading ? "Carregando ranking oficial..." : null}</span>
         {error ? <span className="text-accent-red">{error}</span> : null}
       </div>
 
@@ -174,6 +178,12 @@ function sortRows(rows: RankingRow[], key: SortKey, direction: SortDirection) {
   const multiplier = direction === "desc" ? -1 : 1;
   return [...rows]
     .sort((a, b) => {
+      if (key === "territory") {
+        return a.territory_name.localeCompare(b.territory_name, "pt-BR") * multiplier;
+      }
+      if (key === "trend") {
+        return (a.trend_label ?? "Inconclusivo").localeCompare(b.trend_label ?? "Inconclusivo", "pt-BR") * multiplier;
+      }
       const aValue = key === "value" ? a.value : a.yoy_percent_change ?? Number.NEGATIVE_INFINITY;
       const bValue = key === "value" ? b.value : b.yoy_percent_change ?? Number.NEGATIVE_INFINITY;
       return (aValue - bValue) * multiplier;
