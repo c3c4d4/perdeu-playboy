@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RankingTable } from "@/components/RankingTable";
 import { ANALYSIS_START_YEAR } from "@/lib/constants";
-import { getRankings } from "@/lib/api";
 import type { Indicator, RankingMode, RankingRow } from "@/types/api";
 
 type RankingTerritoryType = "municipality" | "police_area";
@@ -21,12 +20,18 @@ export function RankingsExplorer({ indicators, initialRows }: { indicators: Indi
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const firstRankingsLoad = useRef(true);
 
   useEffect(() => {
     let cancelled = false;
     async function loadRankings() {
+      if (firstRankingsLoad.current) {
+        firstRankingsLoad.current = false;
+        return;
+      }
       setLoading(true);
       setError(null);
+      const { getRankings } = await import("@/lib/api");
       const nextRows = await getRankings(indicator, mode, territoryType, year, month);
       if (!cancelled) {
         setRows(sortKey ? sortRows(nextRows, sortKey, sortDirection) : nextRows);

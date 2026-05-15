@@ -31,7 +31,8 @@ export function GovernorsPerformanceTable({ rows }: { rows: GovernorPerformanceR
             <th className="px-4 py-3">Governador</th>
             <th className="px-4 py-3">Período</th>
             <th className="px-4 py-3 text-right">Redução média</th>
-            <th className="px-4 py-3 text-right">Meses</th>
+            <th className="px-4 py-3 text-right">Meses do mandato</th>
+            <th className="px-4 py-3 text-right">Meses de base</th>
             <th className="px-4 py-3 text-right">Base anualizada</th>
             <th className="px-4 py-3 text-right">Mandato anualizado</th>
             <th className="px-4 py-3">Melhor indicador</th>
@@ -54,6 +55,7 @@ export function GovernorsPerformanceTable({ rows }: { rows: GovernorPerformanceR
                 {row.note ? <p className="mt-1 text-[10px] font-normal uppercase tracking-wide text-muted">{row.note}</p> : null}
               </td>
               <td className="px-4 py-3 text-right font-mono tabular-nums text-foreground">{row.months_count}</td>
+              <td className="px-4 py-3 text-right font-mono tabular-nums text-muted">{row.baseline_months_count}</td>
               <td className="px-4 py-3 text-right font-mono tabular-nums text-muted">{formatNumber(row.annualized_baseline_value)}</td>
               <td className="px-4 py-3 text-right font-mono tabular-nums text-foreground">{formatNumber(row.annualized_current_value)}</td>
               <td className="px-4 py-3 font-mono text-xs uppercase leading-5 text-muted">{row.best_indicator ?? "-"}</td>

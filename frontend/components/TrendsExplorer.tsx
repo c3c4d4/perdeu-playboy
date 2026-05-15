@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TrendChart } from "@/components/TrendChart";
 import { ANALYSIS_START_YEAR } from "@/lib/constants";
-import { getTerritories, getTimeseries } from "@/lib/api";
 import type { Indicator, Territory, TerritoryType, TimeSeriesPoint } from "@/types/api";
 
 interface TrendsExplorerProps {
@@ -22,12 +21,19 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
   const [data, setData] = useState<TimeSeriesPoint[]>(initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const firstTerritoriesLoad = useRef(true);
+  const firstSeriesLoad = useRef(true);
 
   const visibleTerritories = useMemo(() => territories.map((territory) => territory.name), [territories]);
 
   useEffect(() => {
     let cancelled = false;
     async function loadTerritories() {
+      if (firstTerritoriesLoad.current) {
+        firstTerritoriesLoad.current = false;
+        return;
+      }
+      const { getTerritories } = await import("@/lib/api");
       const nextTerritories = await getTerritories(territoryType);
       if (cancelled) {
         return;
@@ -44,8 +50,13 @@ export function TrendsExplorer({ indicators, initialTerritories, initialData }: 
   useEffect(() => {
     let cancelled = false;
     async function loadSeries() {
+      if (firstSeriesLoad.current) {
+        firstSeriesLoad.current = false;
+        return;
+      }
       setLoading(true);
       setError(null);
+      const { getTimeseries } = await import("@/lib/api");
       const nextData = await getTimeseries(indicator, territoryType, territoryName, startYear, endYear);
       if (!cancelled) {
         setData(nextData);

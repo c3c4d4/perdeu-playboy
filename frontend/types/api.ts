@@ -87,6 +87,27 @@ export interface Methodology {
   ethical_notes: string[];
 }
 
+export interface DataSource {
+  name: string;
+  category: string;
+  url: string;
+  file_name: string;
+  checksum_sha256: string | null;
+  size_bytes: number | null;
+  available: boolean;
+}
+
+export interface SnapshotMeta {
+  generated_at: string;
+  analysis_start_year: number;
+  latest_period: {
+    year: number;
+    month: number;
+    period_date: string;
+    source_name: string;
+  };
+}
+
 export interface Territory {
   territory_type: TerritoryType;
   name: string;

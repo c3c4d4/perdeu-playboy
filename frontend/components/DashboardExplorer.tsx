@@ -1,12 +1,11 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MetricCard } from "@/components/MetricCard";
 import { SourceBadge } from "@/components/SourceBadge";
 import { TrendChart } from "@/components/TrendChart";
 import { ANALYSIS_START_YEAR } from "@/lib/constants";
-import { getSummary, getTimeseries } from "@/lib/api";
 import type { SummaryResponse, TerritorialUnit, Territory, TimeSeriesPoint } from "@/types/api";
 
 type DashboardTerritoryMode = "state" | "municipality";
@@ -31,6 +30,7 @@ export function DashboardExplorer({
   const [timeseries, setTimeseries] = useState(initialTimeseries);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const firstDashboardLoad = useRef(true);
 
   const chartStartYear = Math.max(ANALYSIS_START_YEAR, latestYear - 2);
   const canUseTerritorialUnit = territoryMode === "municipality" && selectedMunicipality === "Rio de Janeiro";
@@ -40,6 +40,10 @@ export function DashboardExplorer({
     let cancelled = false;
 
     async function loadDashboard() {
+      if (firstDashboardLoad.current) {
+        firstDashboardLoad.current = false;
+        return;
+      }
       setLoading(true);
       setError(null);
 
@@ -57,6 +61,7 @@ export function DashboardExplorer({
         return;
       }
 
+      const { getSummary, getTimeseries } = await import("@/lib/api");
       const [nextSummary, nextTimeseries] = await Promise.all([
         getSummary(latestYear, territoryType, territoryName),
         getTimeseries("letalidade_violenta", territoryType, territoryName, chartStartYear, latestYear)

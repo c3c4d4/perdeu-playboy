@@ -1,4 +1,6 @@
 .env
+.agents/
+skills-lock.json
 __pycache__/
 .pytest_cache/
 .ruff_cache/
@@ -10,6 +12,9 @@ dist/
 build/
 out/
 frontend/.vercel/
+frontend/test-results/
+frontend/playwright-report/
+marketing/**/preview-frames/
 *.pyc
 *.log
 *.egg-info/

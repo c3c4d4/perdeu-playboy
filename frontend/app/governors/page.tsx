@@ -16,7 +16,19 @@ export default async function GovernorsPage() {
       </section>
 
       <section className="border border-border bg-surface p-5 shadow-hard">
-        <p className="font-mono text-xs uppercase leading-5 tracking-wide text-muted">{performance.methodology}</p>
+        <div className="grid gap-4 font-mono text-xs uppercase leading-5 tracking-wide text-muted">
+          <p>{performance.methodology}</p>
+          <p>
+            A comparação usa o período exato disponível no mandato e uma linha de base dos 12 meses anteriores à posse.
+            Para mandatos muito curtos, o ranking é volátil e aparece com aviso próprio.
+          </p>
+          <p>
+            Indicadores usados: {performance.indicators.join(" / ")}.
+          </p>
+          <p>
+            O ranking descreve variação registrada nos dados do ISP; não é atribuição causal isolada ao governador.
+          </p>
+        </div>
       </section>
 
       <GovernorsPerformanceTable rows={performance.rows} />

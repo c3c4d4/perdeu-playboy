@@ -113,7 +113,10 @@ def _term_performance(term: GovernorTerm, latest_date: date) -> GovernorPerforma
     worst_indicator, worst_value = min(indicator_changes.items(), key=lambda item: item[1])
     note = None
     if months_count < 12:
-        note = f"Base curta: {months_count} mes(es) disponivel(is) no mandato."
+        if months_count == 1:
+            note = "Base curta: 1 mes disponivel no mandato."
+        else:
+            note = f"Base curta: {months_count} meses disponiveis no mandato."
 
     return GovernorPerformanceRow(
         rank=None,

@@ -7,16 +7,25 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import httpx
 
+from app.config import settings
 from app.constants import ANALYSIS_START_YEAR
+from app.etl.extract import checksum_file
+from app.etl.sources import default_isp_sources
 from app.services import isp_repository, population_repository
 from app.services.analytics import latest_period, methodology
 from app.services.governor_performance import governor_performance
 from app.services.indicator_catalog import INDICATORS
+from app.services.territory_repository import ISP_TERRITORIAL_DIVISION_URL
 from app.services.territory_repository import territorial_units
 
 
 TERRITORY_TYPES = ("state", "municipality", "police_area")
+IBGE_RJ_MUNICIPALITIES_GEOJSON_URL = (
+    "https://servicodados.ibge.gov.br/api/v3/malhas/estados/33"
+    "?formato=application/vnd.geo+json&qualidade=minima&intrarregiao=municipio"
+)
 
 
 def export_static_frontend(output_path: Path) -> None:
@@ -39,6 +48,8 @@ def export_static_frontend(output_path: Path) -> None:
         },
         "territorial_units": territorial_units("Rio de Janeiro"),
         "population_by_municipality": _population_by_municipality(),
+        "municipality_geometries": _municipality_geometries(),
+        "sources": _source_metadata(),
         "methodology": methodology(),
         "governor_performance": governor_performance().model_dump(mode="json"),
         "series": _series(month_keys, month_index),
@@ -105,6 +116,106 @@ def _population_by_municipality() -> dict[str, float]:
         if value is not None:
             populations[name] = float(value)
     return populations
+
+
+def _source_metadata() -> list[dict[str, object]]:
+    raw_isp_dir = settings.data_dir / "raw" / "isp"
+    raw_ibge_dir = settings.data_dir / "raw" / "ibge"
+    rows: list[dict[str, object]] = []
+
+    for source in default_isp_sources():
+        path = raw_isp_dir / source.file_name
+        rows.append(_file_source_row(source.name, source.url, path, source.territory_type))
+
+    territorial_path = raw_isp_dir / "Relacao_RISPxAISPxCISP.csv"
+    rows.append(
+        _file_source_row(
+            "isp_territorial_division",
+            ISP_TERRITORIAL_DIVISION_URL,
+            territorial_path,
+            "territorial_division",
+        )
+    )
+
+    population_path = raw_ibge_dir / "population_municipalities_rj_latest.json"
+    rows.append(
+        _file_source_row(
+            "ibge_population_municipalities_rj",
+            "https://sidra.ibge.gov.br/tabela/6579",
+            population_path,
+            "population",
+        )
+    )
+    rows.append(
+        _file_source_row(
+            "ibge_municipality_geometries_rj",
+            IBGE_RJ_MUNICIPALITIES_GEOJSON_URL,
+            raw_ibge_dir / "rj_municipalities_min.geojson",
+            "geometry",
+        )
+    )
+    return rows
+
+
+def _file_source_row(name: str, url: str, path: Path, category: str) -> dict[str, object]:
+    exists = path.exists()
+    return {
+        "name": name,
+        "category": category,
+        "url": url,
+        "file_name": path.name,
+        "checksum_sha256": checksum_file(path) if exists else None,
+        "size_bytes": path.stat().st_size if exists else None,
+        "available": exists,
+    }
+
+
+def _municipality_geometries() -> dict[str, object]:
+    path = _ensure_municipality_geometries_file()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    code_to_name = _municipality_code_to_name()
+    features = []
+    for feature in data.get("features", []):
+        properties = feature.get("properties") or {}
+        ibge_code = str(properties.get("codarea") or "")
+        name = code_to_name.get(ibge_code)
+        if not name:
+            continue
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": feature.get("geometry"),
+                "properties": {
+                    "ibge_code": ibge_code,
+                    "territory_name": name,
+                },
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _ensure_municipality_geometries_file() -> Path:
+    raw_ibge_dir = settings.data_dir / "raw" / "ibge"
+    raw_ibge_dir.mkdir(parents=True, exist_ok=True)
+    path = raw_ibge_dir / "rj_municipalities_min.geojson"
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    response = httpx.get(IBGE_RJ_MUNICIPALITIES_GEOJSON_URL, timeout=90)
+    response.raise_for_status()
+    path.write_bytes(response.content)
+    return path
+
+
+def _municipality_code_to_name() -> dict[str, str]:
+    frame = isp_repository.rows("letalidade_violenta", "municipality", start_year=ANALYSIS_START_YEAR)
+    if frame.empty or "ibge_code" not in frame.columns:
+        return {}
+    pairs = frame[["ibge_code", "territory_name"]].drop_duplicates()
+    return {
+        str(row["ibge_code"]): str(row["territory_name"])
+        for row in pairs.to_dict(orient="records")
+        if str(row.get("ibge_code") or "").strip()
+    }
 
 
 def main() -> None:

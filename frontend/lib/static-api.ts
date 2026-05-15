@@ -2,9 +2,12 @@ import snapshot from "@/lib/static-data.generated.json";
 import type {
   GovernorPerformanceResponse,
   Indicator,
+  DataSource,
   Methodology,
   RankingMode,
   RankingRow,
+  SnapshotMeta,
+  GeoFeatureCollection,
   SummaryCardData,
   SummaryResponse,
   TerritorialUnit,
@@ -23,6 +26,8 @@ type StaticSnapshot = {
   territories: Record<TerritoryType, Territory[]>;
   territorial_units: TerritorialUnit[];
   population_by_municipality: Record<string, number>;
+  municipality_geometries: GeoFeatureCollection;
+  sources: DataSource[];
   methodology: Methodology;
   governor_performance: GovernorPerformanceResponse;
   series: SeriesStore;
@@ -36,6 +41,18 @@ export async function getIndicators(): Promise<Indicator[]> {
 
 export async function getLatestPeriod(): Promise<StaticSnapshot["latest_period"]> {
   return DATA.latest_period;
+}
+
+export async function getSnapshotMeta(): Promise<SnapshotMeta> {
+  return {
+    generated_at: DATA.generated_at,
+    analysis_start_year: DATA.analysis_start_year,
+    latest_period: DATA.latest_period
+  };
+}
+
+export async function getDataSources(): Promise<DataSource[]> {
+  return DATA.sources ?? [];
 }
 
 export async function getTerritories(territoryType: TerritoryType): Promise<Territory[]> {
@@ -157,6 +174,35 @@ export async function getGovernorPerformance(): Promise<GovernorPerformanceRespo
 
 export async function getMethodology(): Promise<Methodology> {
   return DATA.methodology;
+}
+
+export async function getMapData(
+  indicator = "letalidade_violenta",
+  mode: RankingMode = "count",
+  year = DATA.latest_period.year,
+  month = DATA.latest_period.month
+): Promise<GeoFeatureCollection> {
+  const rankings = await getRankings(indicator, mode, "municipality", year, month);
+  const byName = new Map(rankings.map((row) => [row.territory_name, row]));
+  return {
+    type: "FeatureCollection",
+    features: DATA.municipality_geometries.features.map((feature) => {
+      const territoryName = String(feature.properties?.territory_name ?? "");
+      const row = byName.get(territoryName);
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          rank: row?.rank ?? null,
+          value: row?.value ?? 0,
+          rate_per_100k: row?.rate_per_100k ?? null,
+          yoy_absolute_change: row?.yoy_absolute_change ?? null,
+          yoy_percent_change: row?.yoy_percent_change ?? null,
+          metric_value: row ? rankingValue(row, mode) : 0
+        }
+      };
+    })
+  };
 }
 
 function valuesFor(indicator: string, territoryType: TerritoryType, territoryName?: string): number[] {

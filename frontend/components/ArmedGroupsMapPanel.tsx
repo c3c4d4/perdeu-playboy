@@ -30,7 +30,7 @@ export function ArmedGroupsMapPanel() {
           key={year}
           title={`Mapa Histórico dos Grupos Armados ${year}`}
           src={mapUrl}
-          className="h-[680px] w-full bg-background"
+          className="h-[420px] w-full bg-background md:h-[680px]"
           referrerPolicy="no-referrer-when-downgrade"
         />
       </section>

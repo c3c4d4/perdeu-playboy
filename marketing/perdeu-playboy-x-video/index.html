@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #050505;
+        color: #f5f5f5;
+        font-family: "Montserrat", sans-serif;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 78% 22%, rgba(224, 31, 31, 0.24), rgba(224, 31, 31, 0) 26%),
+          radial-gradient(circle at 12% 80%, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0) 28%),
+          #050505;
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      .scene {
+        width: 100%;
+        height: 100%;
+        background-color: #050505;
+      }
+
+      .scene-content {
+        width: 100%;
+        height: 100%;
+        padding: 92px 118px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 48px;
+      }
+
+      .grain {
+        position: absolute;
+        inset: -20%;
+        opacity: 0.14;
+        background-image:
+          linear-gradient(rgba(255,255,255,0.08) 1px, rgba(255,255,255,0) 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.07) 1px, rgba(255,255,255,0) 1px);
+        background-size: 52px 52px;
+        transform: rotate(-2deg);
+      }
+
+      .ghost-type {
+        position: absolute;
+        right: -80px;
+        bottom: -74px;
+        color: rgba(255,255,255,0.06);
+        font-size: 260px;
+        font-weight: 900;
+        line-height: 0.78;
+        letter-spacing: -0.05em;
+        text-transform: uppercase;
+        pointer-events: none;
+      }
+
+      .ghost-type span {
+        display: block;
+      }
+
+      .logo {
+        width: 178px;
+        height: 178px;
+        object-fit: contain;
+        filter: drop-shadow(0 0 28px rgba(224, 31, 31, 0.28));
+      }
+
+      .label {
+        color: #a9a9a9;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .footer-line {
+        text-transform: none;
+      }
+
+      .title {
+        max-width: 1280px;
+        font-family: "League Gothic", sans-serif;
+        font-size: 154px;
+        font-weight: 900;
+        line-height: 0.86;
+        letter-spacing: -0.045em;
+        text-transform: uppercase;
+      }
+
+      .subtitle {
+        max-width: 920px;
+        color: #d4d4d4;
+        font-size: 42px;
+        font-weight: 350;
+        line-height: 1.14;
+      }
+
+      .rule {
+        height: 4px;
+        width: 100%;
+        background: #f5f5f5;
+        transform-origin: left center;
+      }
+
+      .accent-rule {
+        height: 8px;
+        width: 420px;
+        background: #e01f1f;
+        transform-origin: left center;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 40px;
+      }
+
+      .scene-grid {
+        display: grid;
+        grid-template-columns: 0.95fr 1.05fr;
+        gap: 70px;
+        align-items: stretch;
+        min-height: 660px;
+      }
+
+      .panel {
+        border: 3px solid #3a3a3a;
+        background: rgba(17,17,17,0.92);
+        box-shadow: 14px 14px 0 #000000;
+      }
+
+      .panel-inner {
+        height: 100%;
+        padding: 42px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 32px;
+      }
+
+      .metric-row {
+        display: grid;
+        grid-template-columns: 1fr 180px 160px;
+        gap: 22px;
+        align-items: center;
+        border-bottom: 2px solid #2e2e2e;
+        padding: 20px 0;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 28px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metric-row:first-child {
+        border-top: 2px solid #2e2e2e;
+      }
+
+      .metric-name {
+        color: #f2f2f2;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .metric-value {
+        text-align: right;
+        color: #ffffff;
+        font-weight: 800;
+      }
+
+      .metric-bad {
+        text-align: right;
+        color: #ff3636;
+        font-weight: 900;
+      }
+
+      .big-stat {
+        font-size: 172px;
+        font-weight: 900;
+        line-height: 0.82;
+        letter-spacing: -0.055em;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chart-shell {
+        height: 340px;
+        border: 3px solid #343434;
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .chart-shell svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .bar-stack {
+        display: grid;
+        gap: 22px;
+      }
+
+      .bar-row {
+        display: grid;
+        grid-template-columns: 260px 1fr 110px;
+        gap: 22px;
+        align-items: center;
+        color: #d8d8d8;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 25px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .bar-track {
+        height: 28px;
+        border: 2px solid #3b3b3b;
+        background: #080808;
+      }
+
+      .bar-fill {
+        height: 100%;
+        width: var(--w);
+        background: #f2f2f2;
+        transform-origin: left center;
+      }
+
+      .bar-fill.bad {
+        background: #e01f1f;
+      }
+
+      .url {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 44px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .badge-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 28px;
+      }
+
+      .badge {
+        min-height: 170px;
+        border: 3px solid #373737;
+        padding: 28px;
+        background: #111111;
+      }
+
+      .badge strong {
+        display: block;
+        margin-bottom: 18px;
+        color: #fff;
+        font-size: 40px;
+        font-weight: 900;
+        line-height: 0.95;
+        text-transform: uppercase;
+      }
+
+      .badge span {
+        color: #a9a9a9;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 22px;
+        line-height: 1.35;
+        text-transform: uppercase;
+      }
+
+      .transition {
+        z-index: 30;
+        background: #050505;
+      }
+
+      .transition::before,
+      .transition::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transform-origin: left center;
+      }
+
+      .transition::before {
+        background: #f2f2f2;
+      }
+
+      .transition::after {
+        left: auto;
+        width: 34%;
+        background: #e01f1f;
+      }
+
+      .transition .slash {
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          115deg,
+          rgba(5,5,5,0.0) 0,
+          rgba(5,5,5,0.0) 24px,
+          rgba(5,5,5,0.26) 24px,
+          rgba(5,5,5,0.26) 34px
+        );
+      }
+
+      .red {
+        color: #ff3636;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="18"
+      data-width="1920"
+      data-height="1080"
+    >
+      <section id="scene-brand" class="clip scene" data-start="0" data-duration="4.7" data-track-index="1">
+        <div class="grain" data-layout-ignore></div>
+        <div class="ghost-type" data-layout-allow-overflow><span>RJ</span><span>DADOS</span></div>
+        <div class="scene-content">
+          <div class="topbar">
+            <img class="logo" src="assets/logo-brand.png" alt="Perdeu, Playboy" />
+            <div class="label">dados públicos / segurança pública / RJ</div>
+          </div>
+          <div>
+            <div class="accent-rule" id="brand-red-rule"></div>
+            <h1 class="title">Perdeu, Playboy</h1>
+            <p class="subtitle">Um painel público para ler violência no Rio de Janeiro com dados oficiais, histórico e contexto.</p>
+          </div>
+          <div class="rule" id="brand-rule"></div>
+        </div>
+      </section>
+
+      <section id="scene-data" class="clip scene" data-start="4.3" data-duration="5.0" data-track-index="2">
+        <div class="grain" data-layout-ignore></div>
+        <div class="ghost-type" data-layout-allow-overflow><span>ISP</span><span>2000</span></div>
+        <div class="scene-content">
+          <div class="topbar">
+            <div class="label">ISP Dados Abertos / acumulado jan-mar 2026</div>
+            <div class="label">snapshot local: 11/05/2026</div>
+          </div>
+          <div class="scene-grid">
+            <div class="panel">
+              <div class="panel-inner">
+                <div>
+                  <div class="label">piora no período</div>
+                  <div class="big-stat red">+57,9%</div>
+                </div>
+                <div class="subtitle">Latrocínio: 30 registros em 2026 contra 19 no mesmo período de 2025.</div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-inner">
+                <div class="metric-row">
+                  <div class="metric-name">Latrocínio</div>
+                  <div class="metric-value">30</div>
+                  <div class="metric-bad">+57,9%</div>
+                </div>
+                <div class="metric-row">
+                  <div class="metric-name">Roubo de carga</div>
+                  <div class="metric-value">1.043</div>
+                  <div class="metric-bad">+24,5%</div>
+                </div>
+                <div class="metric-row">
+                  <div class="metric-name">Roubo de veículo</div>
+                  <div class="metric-value">7.764</div>
+                  <div class="metric-bad">+18,1%</div>
+                </div>
+                <div class="metric-row">
+                  <div class="metric-name">Letalidade violenta</div>
+                  <div class="metric-value">973</div>
+                  <div class="metric-value">-10,2%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-trends" class="clip scene" data-start="8.8" data-duration="5.0" data-track-index="3">
+        <div class="grain" data-layout-ignore></div>
+        <div class="ghost-type" data-layout-allow-overflow><span>SÉRIE</span><span>HISTÓRICA</span></div>
+        <div class="scene-content">
+          <div class="topbar">
+            <div class="label">tendências / municípios / rankings</div>
+            <div class="label">sem backend em produção</div>
+          </div>
+          <div class="scene-grid">
+            <div>
+              <h2 class="title" style="font-size: 124px; max-width: 800px;">Do número bruto à série histórica.</h2>
+              <p class="subtitle">O site compila estado, municípios e CISPs em uma base estática calculada localmente.</p>
+            </div>
+            <div class="panel">
+              <div class="panel-inner">
+                <div class="chart-shell">
+                  <svg viewBox="0 0 720 280" aria-hidden="true">
+                    <path class="grid-line" d="M0 230 H720 M0 170 H720 M0 110 H720 M0 50 H720" stroke="#2f2f2f" stroke-width="3" fill="none" />
+                    <path id="trend-line" d="M0 210 C95 180 140 200 210 148 S360 88 430 120 S580 198 720 82" stroke="#f2f2f2" stroke-width="8" stroke-linecap="round" fill="none" />
+                    <path id="trend-red" d="M475 128 C550 170 618 156 720 82" stroke="#e01f1f" stroke-width="8" stroke-linecap="round" fill="none" />
+                  </svg>
+                </div>
+                <div class="bar-stack">
+                  <div class="bar-row"><span>municípios</span><div class="bar-track"><div class="bar-fill" style="--w: 92%"></div></div><span>92</span></div>
+                  <div class="bar-row"><span>CISPs</span><div class="bar-track"><div class="bar-fill" style="--w: 86%"></div></div><span>138</span></div>
+                  <div class="bar-row"><span>indicadores</span><div class="bar-track"><div class="bar-fill bad" style="--w: 68%"></div></div><span>11</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-cta" class="clip scene" data-start="13.3" data-duration="4.7" data-track-index="4">
+        <div class="grain" data-layout-ignore></div>
+        <div class="ghost-type" data-layout-allow-overflow><span>ABERTO</span><span>PÚBLICO</span></div>
+        <div class="scene-content">
+          <div class="topbar">
+            <img class="logo" src="assets/logo-cta.png" alt="Perdeu, Playboy" />
+            <div class="label footer-line">dados públicos ✦ g0v brazil & tomoyo ✦ fórum</div>
+          </div>
+          <div>
+            <h2 class="title">Veja o painel.</h2>
+            <div class="badge-grid">
+              <div class="badge"><strong>Dashboard</strong><span>indicadores acumulados e comparação anual</span></div>
+              <div class="badge"><strong>Tendências</strong><span>séries oficiais desde 2000</span></div>
+              <div class="badge"><strong>Rankings</strong><span>municípios, CISPs e governadores</span></div>
+            </div>
+          </div>
+          <div class="topbar">
+            <div class="url">perdeu-playboy.vercel.app</div>
+            <div class="accent-rule" id="cta-rule"></div>
+          </div>
+        </div>
+      </section>
+
+      <div id="transition-1" class="clip transition" data-start="4.1" data-duration="0.75" data-track-index="20"><div class="slash"></div></div>
+      <div id="transition-2" class="clip transition" data-start="8.65" data-duration="0.75" data-track-index="21"><div class="slash"></div></div>
+      <div id="transition-3" class="clip transition" data-start="13.1" data-duration="0.75" data-track-index="22"><div class="slash"></div></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      function has(selector) {
+        return document.querySelector(selector);
+      }
+
+      function addFromTo(selector, fromVars, toVars, at) {
+        if (has(selector)) {
+          tl.fromTo(selector, fromVars, toVars, at);
+        }
+      }
+
+      function revealScene(scene, start) {
+        addFromTo(scene + " .grain", { x: -40, y: 20, opacity: 0 }, { x: 0, y: 0, opacity: 0.14, duration: 1.2, ease: "sine.out" }, start + 0.12);
+        addFromTo(scene + " .ghost-type", { x: 130, opacity: 0 }, { x: 0, opacity: 1, duration: 0.85, ease: "expo.out" }, start + 0.22);
+        addFromTo(scene + " .label", { y: -26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, stagger: 0.08, ease: "power3.out" }, start + 0.24);
+        addFromTo(scene + " .title", { x: -88, opacity: 0, letterSpacing: "-0.10em" }, { x: 0, opacity: 1, letterSpacing: "-0.045em", duration: 0.72, ease: "circ.out" }, start + 0.38);
+        addFromTo(scene + " .subtitle", { x: 54, opacity: 0 }, { x: 0, opacity: 1, duration: 0.58, ease: "power2.out" }, start + 0.64);
+        addFromTo(scene + " .logo", { scale: 0.78, rotation: -8, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.54, ease: "back.out(1.6)" }, start + 0.32);
+      }
+
+      revealScene("#scene-brand", 0);
+      tl.fromTo("#brand-red-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.44, ease: "power4.out" }, 0.28);
+      tl.fromTo("#brand-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: "power2.out" }, 1.0);
+
+      revealScene("#scene-data", 4.3);
+      tl.fromTo("#scene-data .panel", { y: 80, opacity: 0 }, { y: 0, opacity: 1, duration: 0.65, stagger: 0.12, ease: "expo.out" }, 4.62);
+      tl.fromTo("#scene-data .big-stat", { scale: 0.78, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.52, ease: "back.out(1.25)" }, 4.95);
+      tl.fromTo("#scene-data .metric-row", { x: 70, opacity: 0 }, { x: 0, opacity: 1, duration: 0.42, stagger: 0.09, ease: "power4.out" }, 5.08);
+
+      revealScene("#scene-trends", 8.8);
+      tl.fromTo("#scene-trends .panel", { rotationY: -12, opacity: 0, x: 90 }, { rotationY: 0, opacity: 1, x: 0, duration: 0.8, ease: "expo.out" }, 9.15);
+      tl.fromTo("#trend-line", { strokeDasharray: 980, strokeDashoffset: 980 }, { strokeDashoffset: 0, duration: 1.3, ease: "power2.inOut" }, 9.6);
+      tl.fromTo("#trend-red", { strokeDasharray: 310, strokeDashoffset: 310 }, { strokeDashoffset: 0, duration: 0.7, ease: "power4.out" }, 10.3);
+      tl.fromTo("#scene-trends .bar-fill", { scaleX: 0 }, { scaleX: 1, duration: 0.55, stagger: 0.12, ease: "circ.out" }, 10.75);
+
+      revealScene("#scene-cta", 13.3);
+      tl.fromTo("#scene-cta .badge", { y: 75, opacity: 0, scale: 0.94 }, { y: 0, opacity: 1, scale: 1, duration: 0.58, stagger: 0.12, ease: "back.out(1.35)" }, 14.08);
+      tl.fromTo("#scene-cta .url", { x: -72, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: "power4.out" }, 15.0);
+      tl.fromTo("#cta-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power3.out" }, 15.12);
+      tl.to("#scene-cta", { opacity: 0, duration: 0.7, ease: "power2.in" }, 17.25);
+
+      ["#transition-1", "#transition-2", "#transition-3"].forEach((id) => {
+        tl.fromTo(id, { xPercent: -100 }, { xPercent: 100, duration: 0.75, ease: "power3.inOut" }, Number(document.querySelector(id).dataset.start));
+      });
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
