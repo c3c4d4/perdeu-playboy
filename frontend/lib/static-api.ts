@@ -662,7 +662,7 @@ function ratePer100k(value: number, population?: number): number | null {
 
 function rankingValue(row: RankingRow, mode: RankingMode): number {
   if (mode === "rate") {
-    return row.rate_per_100k ?? 0;
+    return row.rate_per_100k ?? row.value;
   }
   if (mode === "yoy") {
     return row.yoy_percent_change ?? Number.NEGATIVE_INFINITY;

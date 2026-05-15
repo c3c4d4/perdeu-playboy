@@ -86,7 +86,7 @@ function periodsFrom(startYear: number, latestYear: number, latestMonth: number)
 
 function initialMapState(periods: Array<{ year: number; month: number }>): MapInitialState {
   if (typeof window === "undefined") {
-    return { indicator: "letalidade_violenta", mode: "count", view: "state", periodIndex: periods.length - 1, uf: "RJ" };
+    return { indicator: "letalidade_violenta", mode: "rate", view: "state", periodIndex: periods.length - 1, uf: "RJ" };
   }
   const params = new URLSearchParams(window.location.search);
   const indicator = params.get("indicator") || "letalidade_violenta";
@@ -100,7 +100,7 @@ function initialMapState(periods: Array<{ year: number; month: number }>): MapIn
   const fallbackIndex = periods.findIndex((item) => item.year === startYear && item.month === 1);
   return {
     indicator,
-    mode: indicator === "crime_geral" ? "rate" : mode === "rate" || mode === "yoy" || mode === "count" ? mode : "count",
+    mode: indicator === "crime_geral" ? "rate" : mode === "rate" || mode === "yoy" || mode === "count" ? mode : "rate",
     view,
     periodIndex: periodIndex >= 0 ? periodIndex : fallbackIndex >= 0 ? fallbackIndex : periods.length - 1,
     uf

@@ -5,8 +5,8 @@ import { getIndicators, getRankings } from "@/lib/api";
 export default async function RankingsPage() {
   const [indicators, municipalityRows, policeAreaRows] = await Promise.all([
     getIndicators(),
-    getRankings("letalidade_violenta", "count", "municipality", 2026, 3),
-    getRankings("letalidade_violenta", "count", "police_area", 2026, 3)
+    getRankings("letalidade_violenta", "rate", "municipality", 2026, 3),
+    getRankings("letalidade_violenta", "rate", "police_area", 2026, 3)
   ]);
 
   return (

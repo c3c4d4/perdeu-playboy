@@ -4,7 +4,7 @@ import { getIndicators, getLatestPeriod, getMapData } from "@/lib/api";
 
 export default async function MapPage() {
   const [indicators, latest] = await Promise.all([getIndicators(), getLatestPeriod()]);
-  const mapData = await getMapData("letalidade_violenta", "count", latest.year, latest.month);
+  const mapData = await getMapData("letalidade_violenta", "rate", latest.year, latest.month);
 
   return (
     <div className="grid gap-8">

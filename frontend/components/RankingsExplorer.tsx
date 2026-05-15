@@ -21,7 +21,7 @@ export function RankingsExplorer({
   const [indicator, setIndicator] = useState("letalidade_violenta");
   const [indicatorOptions, setIndicatorOptions] = useState(indicators);
   const [uf, setUf] = useState<UfCode>("RJ");
-  const [mode, setMode] = useState<RankingMode>("count");
+  const [mode, setMode] = useState<RankingMode>("rate");
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(3);
   const [municipalityRows, setMunicipalityRows] = useState(initialMunicipalityRows);
