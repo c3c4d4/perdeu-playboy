@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { GeoFeatureCollection } from "@/types/api";
+import type { GeoFeatureCollection, Indicator, RankingMode } from "@/types/api";
 
 type Geometry = GeoJSON.Geometry;
 type MapView = "state" | "rio_city";
+type MapIndicator = string | "crime_geral";
 
 function formatNumber(value: unknown) {
   const number = Number(value ?? 0);
@@ -51,9 +52,18 @@ function collectCoordinates(geometry: Geometry | null | undefined): number[][] {
   return [];
 }
 
-function color(value: number, max: number) {
+function color(value: number, max: number, indicator: MapIndicator, mode: RankingMode) {
+  if (indicator === "crime_geral") {
+    const intensity = Math.max(0, Math.min(1, value / Math.max(max, 1)));
+    return `rgb(${46 + Math.round(178 * intensity)}, ${18 + Math.round(34 * (1 - intensity))}, ${18 + Math.round(34 * (1 - intensity))})`;
+  }
+  if (mode === "yoy" && value > 0) {
+    const intensity = Math.max(0, Math.min(1, value / Math.max(max, 1)));
+    return `rgb(${120 + Math.round(104 * intensity)}, ${24 + Math.round(20 * (1 - intensity))}, ${24 + Math.round(20 * (1 - intensity))})`;
+  }
   const intensity = Math.max(0, Math.min(1, value / Math.max(max, 1)));
-  return `rgb(${46 + Math.round(178 * intensity)}, ${18 + Math.round(34 * (1 - intensity))}, ${18 + Math.round(34 * (1 - intensity))})`;
+  const shade = 42 + Math.round(178 * intensity);
+  return `rgb(${shade}, ${shade}, ${shade})`;
 }
 
 function periodsUntil(latestYear: number, latestMonth: number) {
@@ -72,15 +82,19 @@ function periodsUntil(latestYear: number, latestMonth: number) {
 }
 
 export function MunicipalityChoroplethPanel({
+  indicators,
   initialData,
   latestYear,
   latestMonth
 }: {
+  indicators: Indicator[];
   initialData: GeoFeatureCollection;
   latestYear: number;
   latestMonth: number;
 }) {
   const periods = useMemo(() => periodsUntil(latestYear, latestMonth), [latestMonth, latestYear]);
+  const [indicator, setIndicator] = useState<MapIndicator>("letalidade_violenta");
+  const [mode, setMode] = useState<RankingMode>("count");
   const [periodIndex, setPeriodIndex] = useState(periods.length - 1);
   const [view, setView] = useState<MapView>("state");
   const [data, setData] = useState(initialData);
@@ -102,16 +116,24 @@ export function MunicipalityChoroplethPanel({
     );
   }, [data]);
 
-  async function loadMap(nextView = view, nextPeriodIndex = periodIndex) {
+  async function loadMap(nextView = view, nextPeriodIndex = periodIndex, nextIndicator = indicator, nextMode = mode) {
     setLoading(true);
     setError(null);
     try {
-      const { getCrimeRateMapData, getRioCityCrimeRateMapData } = await import("@/lib/api");
+      const { getCrimeRateMapData, getMapData, getRioCityCrimeRateMapData, getRioCityMapData } = await import("@/lib/api");
       const period = periods[nextPeriodIndex] ?? periods[periods.length - 1];
-      const nextData =
-        nextView === "rio_city"
-          ? await getRioCityCrimeRateMapData(period.year, period.month)
-          : await getCrimeRateMapData(period.year, period.month);
+      let nextData: GeoFeatureCollection;
+      if (nextIndicator === "crime_geral") {
+        nextData =
+          nextView === "rio_city"
+            ? await getRioCityCrimeRateMapData(period.year, period.month)
+            : await getCrimeRateMapData(period.year, period.month);
+      } else {
+        nextData =
+          nextView === "rio_city"
+            ? await getRioCityMapData(nextIndicator, nextMode, period.year, period.month)
+            : await getMapData(nextIndicator, nextMode, period.year, period.month);
+      }
       setData(nextData);
       setSelected(null);
     } catch {
@@ -123,30 +145,69 @@ export function MunicipalityChoroplethPanel({
 
   function openRioCity() {
     setView("rio_city");
-    void loadMap("rio_city", periodIndex);
+    void loadMap("rio_city", periodIndex, indicator, mode);
   }
 
   function backToState() {
     setView("state");
-    void loadMap("state", periodIndex);
+    void loadMap("state", periodIndex, indicator, mode);
   }
 
   function changePeriod(nextPeriodIndex: number) {
     setPeriodIndex(nextPeriodIndex);
-    void loadMap(view, nextPeriodIndex);
+    void loadMap(view, nextPeriodIndex, indicator, mode);
+  }
+
+  function changeIndicator(nextIndicator: MapIndicator) {
+    setIndicator(nextIndicator);
+    if (nextIndicator === "crime_geral") {
+      setMode("rate");
+      void loadMap(view, periodIndex, nextIndicator, "rate");
+      return;
+    }
+    void loadMap(view, periodIndex, nextIndicator, mode);
+  }
+
+  function changeMode(nextMode: RankingMode) {
+    setMode(nextMode);
+    void loadMap(view, periodIndex, indicator, nextMode);
   }
 
   const selectedPeriod = periods[periodIndex] ?? periods[periods.length - 1];
 
   return (
     <section className="grid gap-4">
-      <div className="grid gap-4 border border-border bg-surface p-5 shadow-hard md:grid-cols-[1fr_auto]">
-        <div>
-          <p className="font-mono text-xs font-bold uppercase tracking-widest text-muted">Crime por 100 mil habitantes</p>
-          <p className="mt-2 font-mono text-xs uppercase tracking-widest text-muted">
-            Soma móvel de 12 meses: letalidade violenta, roubo de rua, roubo de veículo, roubo de carga e estupro.
-          </p>
-        </div>
+      <div className="grid gap-4 border border-border bg-surface p-5 shadow-hard md:grid-cols-3">
+        <label className="grid gap-2 font-mono text-xs font-bold uppercase tracking-widest text-muted">
+          Indicador
+          <select
+            className="h-10 border border-border bg-surface px-3 text-sm text-foreground"
+            value={indicator}
+            onChange={(event) => changeIndicator(event.target.value)}
+          >
+            <option value="crime_geral">CRIME GERAL</option>
+            {indicators.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.code === "letalidade_violenta" ? "LETALIDADE GERAL" : item.name.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="grid gap-2 font-mono text-xs font-bold uppercase tracking-widest text-muted">
+          Métrica
+          <select
+            className="h-10 border border-border bg-surface px-3 text-sm text-foreground disabled:opacity-50"
+            value={indicator === "crime_geral" ? "rate" : mode}
+            disabled={indicator === "crime_geral"}
+            onChange={(event) => changeMode(event.target.value as RankingMode)}
+          >
+            <option value="count">VALOR ABSOLUTO</option>
+            <option value="rate">TAXA 100 MIL</option>
+            <option value="yoy">VARIAÇÃO ANUAL</option>
+          </select>
+        </label>
+
         <div className="flex items-end justify-between gap-3 font-mono text-xs uppercase tracking-widest text-muted">
           <span>{loading ? "Carregando mapa..." : error ?? (view === "rio_city" ? `Bairros: ${data.features.length}` : `Municípios: ${data.features.length}`)}</span>
           {view === "rio_city" ? (
@@ -170,7 +231,7 @@ export function MunicipalityChoroplethPanel({
                 <path
                   key={`${name}-${sourceName}`}
                   d={geometryPath(feature.geometry, bbox)}
-                  fill={color(value, maxMetric)}
+                  fill={color(value, maxMetric, indicator, mode)}
                   stroke="#050505"
                   strokeWidth={canOpenRio ? "2.4" : "1.2"}
                   className={canOpenRio ? "cursor-pointer transition-opacity hover:opacity-80" : "transition-opacity hover:opacity-80"}
@@ -205,13 +266,25 @@ export function MunicipalityChoroplethPanel({
             ) : null}
             <dl className="mt-6 grid gap-4 font-mono text-xs uppercase tracking-wide">
               <div className="border-t border-border pt-3">
-                <dt className="text-muted">Taxa 100 mil</dt>
-                <dd className="mt-1 text-lg font-bold text-accent-red">{formatNumber(selected?.rate_per_100k)}</dd>
+                <dt className="text-muted">{indicator === "crime_geral" || mode === "rate" ? "Taxa 100 mil" : "Valor"}</dt>
+                <dd className={indicator === "crime_geral" || mode === "rate" ? "mt-1 text-lg font-bold text-accent-red" : "mt-1 text-lg font-bold text-foreground"}>
+                  {formatNumber(indicator === "crime_geral" || mode === "rate" ? selected?.rate_per_100k : selected?.value)}
+                </dd>
               </div>
-              <div className="border-t border-border pt-3">
-                <dt className="text-muted">População base</dt>
-                <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.population)}</dd>
-              </div>
+              {indicator === "crime_geral" ? (
+                <div className="border-t border-border pt-3">
+                  <dt className="text-muted">População base</dt>
+                  <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.population)}</dd>
+                </div>
+              ) : null}
+              {indicator !== "crime_geral" ? (
+                <div className="border-t border-border pt-3">
+                  <dt className="text-muted">Variação anual</dt>
+                  <dd className={Number(selected?.yoy_percent_change ?? 0) > 0 ? "mt-1 text-lg font-bold text-accent-red" : "mt-1 text-lg font-bold text-foreground"}>
+                    {formatNumber(selected?.yoy_percent_change)}%
+                  </dd>
+                </div>
+              ) : null}
               <div className="border-t border-border pt-3">
                 <dt className="text-muted">Rank</dt>
                 <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.rank)}</dd>

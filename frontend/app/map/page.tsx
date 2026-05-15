@@ -1,10 +1,10 @@
 import { MunicipalityChoroplethPanel } from "@/components/MunicipalityChoroplethPanel";
 import { SourceBadge } from "@/components/SourceBadge";
-import { getCrimeRateMapData, getLatestPeriod } from "@/lib/api";
+import { getIndicators, getLatestPeriod, getMapData } from "@/lib/api";
 
 export default async function MapPage() {
-  const latest = await getLatestPeriod();
-  const mapData = await getCrimeRateMapData(latest.year, latest.month);
+  const [indicators, latest] = await Promise.all([getIndicators(), getLatestPeriod()]);
+  const mapData = await getMapData("letalidade_violenta", "count", latest.year, latest.month);
 
   return (
     <div className="grid gap-8">
@@ -17,6 +17,7 @@ export default async function MapPage() {
       </section>
 
       <MunicipalityChoroplethPanel
+        indicators={indicators}
         initialData={mapData}
         latestYear={latest.year}
         latestMonth={latest.month}
