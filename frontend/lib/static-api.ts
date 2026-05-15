@@ -35,6 +35,7 @@ type StaticSnapshot = {
 };
 
 const DATA = snapshot as StaticSnapshot;
+const CRIME_RATE_INDICATORS = ["letalidade_violenta", "roubo_rua", "roubo_veiculo", "roubo_carga", "estupro"];
 
 export async function getIndicators(): Promise<Indicator[]> {
   return DATA.indicators;
@@ -202,6 +203,21 @@ export async function getMapData(
   };
 }
 
+export async function getCrimeRateMapData(
+  year = DATA.latest_period.year,
+  month = DATA.latest_period.month
+): Promise<GeoFeatureCollection> {
+  const periodIndex = monthIndex(year, month);
+  const features = DATA.municipality_geometries.features.map((feature) => {
+    const territoryName = String(feature.properties?.territory_name ?? "");
+    const population = DATA.population_by_municipality[territoryName] ?? null;
+    const value = rollingCrimeValue("municipality", territoryName, periodIndex);
+    return featureWithCrimeRate(feature, value, population, "Município");
+  });
+  rankFeatures(features);
+  return { type: "FeatureCollection", features };
+}
+
 export async function getRioCityMapData(
   indicator = "letalidade_violenta",
   mode: RankingMode = "count",
@@ -227,6 +243,43 @@ export async function getRioCityMapData(
   };
 }
 
+export async function getRioCityCrimeRateMapData(
+  year = DATA.latest_period.year,
+  month = DATA.latest_period.month
+): Promise<GeoFeatureCollection> {
+  const periodIndex = monthIndex(year, month);
+  const populationByPoliceArea = rioPopulationByPoliceArea();
+  const features = DATA.rio_neighborhood_geometries.features.map((feature) => {
+    const sourceTerritoryName = String(feature.properties?.source_territory_name ?? "");
+    const population = sourceTerritoryName ? populationByPoliceArea[sourceTerritoryName] ?? null : null;
+    const value = sourceTerritoryName ? rollingCrimeValue("police_area", sourceTerritoryName, periodIndex) : 0;
+    return featureWithCrimeRate(feature, value, population, "Bairro/CISP");
+  });
+  rankFeatures(features);
+  return { type: "FeatureCollection", features };
+}
+
+function featureWithCrimeRate(
+  feature: GeoFeatureCollection["features"][number],
+  value: number,
+  population: number | null,
+  mapUnitType: string
+): GeoFeatureCollection["features"][number] {
+  const rate = population && population > 0 ? round1((value / population) * 100000) : null;
+  return {
+    ...feature,
+    properties: {
+      ...feature.properties,
+      map_unit_type: mapUnitType,
+      rank: null,
+      value,
+      population,
+      rate_per_100k: rate,
+      metric_value: rate ?? 0
+    }
+  };
+}
+
 function featureWithStats(
   feature: GeoFeatureCollection["features"][number],
   row: RankingRow | undefined,
@@ -246,6 +299,40 @@ function featureWithStats(
       metric_value: row ? rankingValue(row, mode) : 0
     }
   };
+}
+
+function rollingCrimeValue(territoryType: TerritoryType, territoryName: string, periodIndex: number): number {
+  if (periodIndex < 0) {
+    return 0;
+  }
+  const start = Math.max(0, periodIndex - 11);
+  let total = 0;
+  for (const indicator of CRIME_RATE_INDICATORS) {
+    const values = DATA.series[indicator]?.[territoryType]?.[territoryName] ?? [];
+    for (let index = start; index <= periodIndex; index += 1) {
+      total += values[index] ?? 0;
+    }
+  }
+  return round1(total);
+}
+
+function rioPopulationByPoliceArea(): Record<string, number> {
+  const output: Record<string, number> = {};
+  for (const feature of DATA.rio_neighborhood_geometries.features) {
+    const sourceTerritoryName = String(feature.properties?.source_territory_name ?? "");
+    const population = Number(feature.properties?.population ?? 0);
+    if (sourceTerritoryName && population > 0) {
+      output[sourceTerritoryName] = (output[sourceTerritoryName] ?? 0) + population;
+    }
+  }
+  return output;
+}
+
+function rankFeatures(features: GeoFeatureCollection["features"]) {
+  const ranked = [...features].sort((a, b) => Number(b.properties.metric_value ?? 0) - Number(a.properties.metric_value ?? 0));
+  ranked.forEach((feature, index) => {
+    feature.properties.rank = Number(feature.properties.metric_value ?? 0) > 0 ? index + 1 : null;
+  });
 }
 
 function valuesFor(indicator: string, territoryType: TerritoryType, territoryName?: string): number[] {

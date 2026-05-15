@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import unicodedata
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -32,6 +33,10 @@ RIO_NEIGHBORHOODS_GEOJSON_URL = (
     "https://pgeo3.rio.rj.gov.br/arcgis/rest/services/Cartografia/"
     "Limites_administrativos/FeatureServer/4/query"
     "?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson"
+)
+RIO_NEIGHBORHOOD_POPULATION_URL = (
+    "https://www.arcgis.com/sharing/rest/content/items/"
+    "814c735b54c741dcbaf8e865f2bfb42d/data"
 )
 
 
@@ -170,6 +175,14 @@ def _source_metadata() -> list[dict[str, object]]:
             "geometry",
         )
     )
+    rows.append(
+        _file_source_row(
+            "data_rio_neighborhood_population_2022",
+            RIO_NEIGHBORHOOD_POPULATION_URL,
+            raw_ibge_dir / "rio_neighborhood_population_2022.zip",
+            "population",
+        )
+    )
     return rows
 
 
@@ -214,6 +227,7 @@ def _rio_neighborhood_geometries() -> dict[str, object]:
     path = _ensure_rio_neighborhood_geometries_file()
     data = json.loads(path.read_text(encoding="utf-8"))
     neighborhood_to_unit = _rio_neighborhood_to_territorial_unit()
+    neighborhood_population = _rio_neighborhood_population()
     aliases = {
         "imperial de sao cristovao": "sao cristovao",
         "osvaldo cruz": "oswaldo cruz",
@@ -224,6 +238,7 @@ def _rio_neighborhood_geometries() -> dict[str, object]:
         neighborhood_name = str(properties.get("nome") or "").strip()
         lookup_key = aliases.get(_normalize_name(neighborhood_name), _normalize_name(neighborhood_name))
         unit = neighborhood_to_unit.get(lookup_key)
+        population = neighborhood_population.get(lookup_key)
         features.append(
             {
                 "type": "Feature",
@@ -235,6 +250,7 @@ def _rio_neighborhood_geometries() -> dict[str, object]:
                     "cisp": unit["cisp"] if unit else None,
                     "police_area_name": unit["police_area_name"] if unit else None,
                     "source_level": "CISP" if unit else None,
+                    "population": population,
                 },
             }
         )
@@ -263,6 +279,33 @@ def _ensure_rio_neighborhood_geometries_file() -> Path:
     response.raise_for_status()
     path.write_bytes(response.content)
     return path
+
+
+def _ensure_rio_neighborhood_population_file() -> Path:
+    raw_ibge_dir = settings.data_dir / "raw" / "ibge"
+    raw_ibge_dir.mkdir(parents=True, exist_ok=True)
+    path = raw_ibge_dir / "rio_neighborhood_population_2022.zip"
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    response = httpx.get(RIO_NEIGHBORHOOD_POPULATION_URL, timeout=90, follow_redirects=True)
+    response.raise_for_status()
+    path.write_bytes(response.content)
+    return path
+
+
+def _rio_neighborhood_population() -> dict[str, float]:
+    path = _ensure_rio_neighborhood_population_file()
+    with zipfile.ZipFile(path) as archive:
+        csv_name = next(name for name in archive.namelist() if name.lower().endswith(".csv"))
+        with archive.open(csv_name) as file:
+            frame = pd.read_csv(file, sep=";", encoding="latin1")
+
+    value_columns = list(frame.columns[10:])
+    frame["population"] = frame[value_columns].apply(pd.to_numeric, errors="coerce").fillna(0).sum(axis=1)
+    return {
+        _normalize_name(str(row["bairro"])): float(row["population"])
+        for row in frame[["bairro", "population"]].to_dict(orient="records")
+    }
 
 
 def _rio_neighborhood_to_territorial_unit() -> dict[str, dict[str, object]]:

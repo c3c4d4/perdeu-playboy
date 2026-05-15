@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { GeoFeatureCollection, Indicator, RankingMode } from "@/types/api";
+import type { GeoFeatureCollection } from "@/types/api";
 
 type Geometry = GeoJSON.Geometry;
 type MapView = "state" | "rio_city";
@@ -51,29 +51,37 @@ function collectCoordinates(geometry: Geometry | null | undefined): number[][] {
   return [];
 }
 
-function color(value: number, max: number, mode: RankingMode) {
-  if (mode === "yoy" && value > 0) {
-    const intensity = Math.min(1, value / Math.max(max, 1));
-    return `rgb(${120 + Math.round(104 * intensity)}, ${24 + Math.round(20 * (1 - intensity))}, ${24 + Math.round(20 * (1 - intensity))})`;
-  }
+function color(value: number, max: number) {
   const intensity = Math.max(0, Math.min(1, value / Math.max(max, 1)));
-  const shade = 42 + Math.round(178 * intensity);
-  return `rgb(${shade}, ${shade}, ${shade})`;
+  return `rgb(${46 + Math.round(178 * intensity)}, ${18 + Math.round(34 * (1 - intensity))}, ${18 + Math.round(34 * (1 - intensity))})`;
+}
+
+function periodsUntil(latestYear: number, latestMonth: number) {
+  const periods: Array<{ year: number; month: number; label: string }> = [];
+  for (let year = 2000; year <= latestYear; year += 1) {
+    const maxMonth = year === latestYear ? latestMonth : 12;
+    for (let month = 1; month <= maxMonth; month += 1) {
+      periods.push({
+        year,
+        month,
+        label: `${String(month).padStart(2, "0")}/${year}`
+      });
+    }
+  }
+  return periods;
 }
 
 export function MunicipalityChoroplethPanel({
-  indicators,
   initialData,
   latestYear,
   latestMonth
 }: {
-  indicators: Indicator[];
   initialData: GeoFeatureCollection;
   latestYear: number;
   latestMonth: number;
 }) {
-  const [indicator, setIndicator] = useState("letalidade_violenta");
-  const [mode, setMode] = useState<RankingMode>("count");
+  const periods = useMemo(() => periodsUntil(latestYear, latestMonth), [latestMonth, latestYear]);
+  const [periodIndex, setPeriodIndex] = useState(periods.length - 1);
   const [view, setView] = useState<MapView>("state");
   const [data, setData] = useState(initialData);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
@@ -94,15 +102,16 @@ export function MunicipalityChoroplethPanel({
     );
   }, [data]);
 
-  async function loadMap(nextIndicator = indicator, nextMode = mode, nextView = view) {
+  async function loadMap(nextView = view, nextPeriodIndex = periodIndex) {
     setLoading(true);
     setError(null);
     try {
-      const { getMapData, getRioCityMapData } = await import("@/lib/api");
+      const { getCrimeRateMapData, getRioCityCrimeRateMapData } = await import("@/lib/api");
+      const period = periods[nextPeriodIndex] ?? periods[periods.length - 1];
       const nextData =
         nextView === "rio_city"
-          ? await getRioCityMapData(nextIndicator, nextMode, latestYear, latestMonth)
-          : await getMapData(nextIndicator, nextMode, latestYear, latestMonth);
+          ? await getRioCityCrimeRateMapData(period.year, period.month)
+          : await getCrimeRateMapData(period.year, period.month);
       setData(nextData);
       setSelected(null);
     } catch {
@@ -114,52 +123,30 @@ export function MunicipalityChoroplethPanel({
 
   function openRioCity() {
     setView("rio_city");
-    void loadMap(indicator, mode, "rio_city");
+    void loadMap("rio_city", periodIndex);
   }
 
   function backToState() {
     setView("state");
-    void loadMap(indicator, mode, "state");
+    void loadMap("state", periodIndex);
   }
+
+  function changePeriod(nextPeriodIndex: number) {
+    setPeriodIndex(nextPeriodIndex);
+    void loadMap(view, nextPeriodIndex);
+  }
+
+  const selectedPeriod = periods[periodIndex] ?? periods[periods.length - 1];
 
   return (
     <section className="grid gap-4">
-      <div className="grid gap-4 border border-border bg-surface p-5 shadow-hard md:grid-cols-3">
-        <label className="grid gap-2 font-mono text-xs font-bold uppercase tracking-widest text-muted">
-          Indicador
-          <select
-            className="h-10 border border-border bg-surface px-3 text-sm text-foreground"
-            value={indicator}
-            onChange={(event) => {
-              const nextIndicator = event.target.value;
-              setIndicator(nextIndicator);
-              void loadMap(nextIndicator, mode, view);
-            }}
-          >
-            {indicators.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.name.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="grid gap-2 font-mono text-xs font-bold uppercase tracking-widest text-muted">
-          Métrica
-          <select
-            className="h-10 border border-border bg-surface px-3 text-sm text-foreground"
-            value={mode}
-            onChange={(event) => {
-              const nextMode = event.target.value as RankingMode;
-              setMode(nextMode);
-              void loadMap(indicator, nextMode, view);
-            }}
-          >
-            <option value="count">VALOR ABSOLUTO</option>
-            <option value="yoy">VARIAÇÃO ANUAL</option>
-          </select>
-        </label>
-
+      <div className="grid gap-4 border border-border bg-surface p-5 shadow-hard md:grid-cols-[1fr_auto]">
+        <div>
+          <p className="font-mono text-xs font-bold uppercase tracking-widest text-muted">Crime por 100 mil habitantes</p>
+          <p className="mt-2 font-mono text-xs uppercase tracking-widest text-muted">
+            Soma móvel de 12 meses: letalidade violenta, roubo de rua, roubo de veículo, roubo de carga e estupro.
+          </p>
+        </div>
         <div className="flex items-end justify-between gap-3 font-mono text-xs uppercase tracking-widest text-muted">
           <span>{loading ? "Carregando mapa..." : error ?? (view === "rio_city" ? `Bairros: ${data.features.length}` : `Municípios: ${data.features.length}`)}</span>
           {view === "rio_city" ? (
@@ -183,7 +170,7 @@ export function MunicipalityChoroplethPanel({
                 <path
                   key={`${name}-${sourceName}`}
                   d={geometryPath(feature.geometry, bbox)}
-                  fill={color(value, maxMetric, mode)}
+                  fill={color(value, maxMetric)}
                   stroke="#050505"
                   strokeWidth={canOpenRio ? "2.4" : "1.2"}
                   className={canOpenRio ? "cursor-pointer transition-opacity hover:opacity-80" : "transition-opacity hover:opacity-80"}
@@ -218,14 +205,12 @@ export function MunicipalityChoroplethPanel({
             ) : null}
             <dl className="mt-6 grid gap-4 font-mono text-xs uppercase tracking-wide">
               <div className="border-t border-border pt-3">
-                <dt className="text-muted">Valor</dt>
-                <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.value)}</dd>
+                <dt className="text-muted">Taxa 100 mil</dt>
+                <dd className="mt-1 text-lg font-bold text-accent-red">{formatNumber(selected?.rate_per_100k)}</dd>
               </div>
               <div className="border-t border-border pt-3">
-                <dt className="text-muted">Variação anual</dt>
-                <dd className={Number(selected?.yoy_percent_change ?? 0) > 0 ? "mt-1 text-lg font-bold text-accent-red" : "mt-1 text-lg font-bold text-foreground"}>
-                  {formatNumber(selected?.yoy_percent_change)}%
-                </dd>
+                <dt className="text-muted">População base</dt>
+                <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.population)}</dd>
               </div>
               <div className="border-t border-border pt-3">
                 <dt className="text-muted">Rank</dt>
@@ -234,6 +219,23 @@ export function MunicipalityChoroplethPanel({
             </dl>
           </aside>
         </div>
+      </div>
+
+      <div className="border border-border bg-surface p-5 shadow-hard">
+        <div className="flex items-center justify-between gap-4 font-mono text-xs font-bold uppercase tracking-widest text-muted">
+          <span>2000</span>
+          <span className="text-foreground">{selectedPeriod?.label}</span>
+          <span>{latestYear}</span>
+        </div>
+        <input
+          aria-label="Linha do tempo do mapa"
+          type="range"
+          min={0}
+          max={Math.max(0, periods.length - 1)}
+          value={periodIndex}
+          className="mt-4 w-full accent-red-700"
+          onChange={(event) => changePeriod(Number(event.target.value))}
+        />
       </div>
     </section>
   );
