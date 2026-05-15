@@ -27,6 +27,7 @@ type StaticSnapshot = {
   territorial_units: TerritorialUnit[];
   population_by_municipality: Record<string, number>;
   municipality_geometries: GeoFeatureCollection;
+  rio_neighborhood_geometries: GeoFeatureCollection;
   sources: DataSource[];
   methodology: Methodology;
   governor_performance: GovernorPerformanceResponse;
@@ -182,26 +183,54 @@ export async function getMapData(
   year = DATA.latest_period.year,
   month = DATA.latest_period.month
 ): Promise<GeoFeatureCollection> {
-  const rankings = await getRankings(indicator, mode, "municipality", year, month);
-  const byName = new Map(rankings.map((row) => [row.territory_name, row]));
+  const municipalityRankings = await getRankings(indicator, mode, "municipality", year, month);
+  const policeAreaRankings = await getRankings(indicator, mode, "police_area", year, month);
+  const byMunicipality = new Map(municipalityRankings.map((row) => [row.territory_name, row]));
+  const byPoliceArea = new Map(policeAreaRankings.map((row) => [row.territory_name, row]));
+  const features = [
+    ...DATA.municipality_geometries.features
+      .filter((feature) => String(feature.properties?.territory_name ?? "") !== "Rio de Janeiro")
+      .map((feature) => {
+        const territoryName = String(feature.properties?.territory_name ?? "");
+        const row = byMunicipality.get(territoryName);
+        return featureWithStats(feature, row, mode, "Município");
+      }),
+    ...DATA.rio_neighborhood_geometries.features.map((feature) => {
+      const sourceTerritoryName = String(feature.properties?.source_territory_name ?? "");
+      const row = sourceTerritoryName ? byPoliceArea.get(sourceTerritoryName) : undefined;
+      return featureWithStats(feature, row, mode, "Bairro/CISP");
+    })
+  ];
+
+  const ranked = [...features].sort((a, b) => Number(b.properties.metric_value ?? 0) - Number(a.properties.metric_value ?? 0));
+  ranked.forEach((feature, index) => {
+    feature.properties.rank = Number(feature.properties.metric_value ?? 0) > 0 ? index + 1 : null;
+  });
+
   return {
     type: "FeatureCollection",
-    features: DATA.municipality_geometries.features.map((feature) => {
-      const territoryName = String(feature.properties?.territory_name ?? "");
-      const row = byName.get(territoryName);
-      return {
-        ...feature,
-        properties: {
-          ...feature.properties,
-          rank: row?.rank ?? null,
-          value: row?.value ?? 0,
-          rate_per_100k: row?.rate_per_100k ?? null,
-          yoy_absolute_change: row?.yoy_absolute_change ?? null,
-          yoy_percent_change: row?.yoy_percent_change ?? null,
-          metric_value: row ? rankingValue(row, mode) : 0
-        }
-      };
-    })
+    features
+  };
+}
+
+function featureWithStats(
+  feature: GeoFeatureCollection["features"][number],
+  row: RankingRow | undefined,
+  mode: RankingMode,
+  mapUnitType: string
+): GeoFeatureCollection["features"][number] {
+  return {
+    ...feature,
+    properties: {
+      ...feature.properties,
+      map_unit_type: mapUnitType,
+      rank: null,
+      value: row?.value ?? 0,
+      rate_per_100k: row?.rate_per_100k ?? null,
+      yoy_absolute_change: row?.yoy_absolute_change ?? null,
+      yoy_percent_change: row?.yoy_percent_change ?? null,
+      metric_value: row ? rankingValue(row, mode) : 0
+    }
   };
 }
 

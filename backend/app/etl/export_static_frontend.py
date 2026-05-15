@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -26,6 +28,11 @@ IBGE_RJ_MUNICIPALITIES_GEOJSON_URL = (
     "https://servicodados.ibge.gov.br/api/v3/malhas/estados/33"
     "?formato=application/vnd.geo+json&qualidade=minima&intrarregiao=municipio"
 )
+RIO_NEIGHBORHOODS_GEOJSON_URL = (
+    "https://pgeo3.rio.rj.gov.br/arcgis/rest/services/Cartografia/"
+    "Limites_administrativos/FeatureServer/4/query"
+    "?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson"
+)
 
 
 def export_static_frontend(output_path: Path) -> None:
@@ -49,6 +56,7 @@ def export_static_frontend(output_path: Path) -> None:
         "territorial_units": territorial_units("Rio de Janeiro"),
         "population_by_municipality": _population_by_municipality(),
         "municipality_geometries": _municipality_geometries(),
+        "rio_neighborhood_geometries": _rio_neighborhood_geometries(),
         "sources": _source_metadata(),
         "methodology": methodology(),
         "governor_performance": governor_performance().model_dump(mode="json"),
@@ -154,6 +162,14 @@ def _source_metadata() -> list[dict[str, object]]:
             "geometry",
         )
     )
+    rows.append(
+        _file_source_row(
+            "data_rio_neighborhood_geometries_rio",
+            RIO_NEIGHBORHOODS_GEOJSON_URL,
+            raw_ibge_dir / "rio_neighborhoods.geojson",
+            "geometry",
+        )
+    )
     return rows
 
 
@@ -194,6 +210,37 @@ def _municipality_geometries() -> dict[str, object]:
     return {"type": "FeatureCollection", "features": features}
 
 
+def _rio_neighborhood_geometries() -> dict[str, object]:
+    path = _ensure_rio_neighborhood_geometries_file()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    neighborhood_to_unit = _rio_neighborhood_to_territorial_unit()
+    aliases = {
+        "imperial de sao cristovao": "sao cristovao",
+        "osvaldo cruz": "oswaldo cruz",
+    }
+    features = []
+    for feature in data.get("features", []):
+        properties = feature.get("properties") or {}
+        neighborhood_name = str(properties.get("nome") or "").strip()
+        lookup_key = aliases.get(_normalize_name(neighborhood_name), _normalize_name(neighborhood_name))
+        unit = neighborhood_to_unit.get(lookup_key)
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": feature.get("geometry"),
+                "properties": {
+                    "territory_name": neighborhood_name,
+                    "municipality": "Rio de Janeiro",
+                    "source_territory_name": unit["territorial_unit"] if unit else None,
+                    "cisp": unit["cisp"] if unit else None,
+                    "police_area_name": unit["police_area_name"] if unit else None,
+                    "source_level": "CISP" if unit else None,
+                },
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
 def _ensure_municipality_geometries_file() -> Path:
     raw_ibge_dir = settings.data_dir / "raw" / "ibge"
     raw_ibge_dir.mkdir(parents=True, exist_ok=True)
@@ -204,6 +251,38 @@ def _ensure_municipality_geometries_file() -> Path:
     response.raise_for_status()
     path.write_bytes(response.content)
     return path
+
+
+def _ensure_rio_neighborhood_geometries_file() -> Path:
+    raw_ibge_dir = settings.data_dir / "raw" / "ibge"
+    raw_ibge_dir.mkdir(parents=True, exist_ok=True)
+    path = raw_ibge_dir / "rio_neighborhoods.geojson"
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    response = httpx.get(RIO_NEIGHBORHOODS_GEOJSON_URL, timeout=90)
+    response.raise_for_status()
+    path.write_bytes(response.content)
+    return path
+
+
+def _rio_neighborhood_to_territorial_unit() -> dict[str, dict[str, object]]:
+    output: dict[str, dict[str, object]] = {}
+    for unit in territorial_units("Rio de Janeiro"):
+        for neighborhood in _split_territorial_unit(str(unit["territorial_unit"])):
+            output.setdefault(_normalize_name(neighborhood), unit)
+    return output
+
+
+def _split_territorial_unit(value: str) -> list[str]:
+    cleaned = re.sub(r"\s*\(parte\)", "", value, flags=re.IGNORECASE)
+    cleaned = cleaned.replace(" e ", ", ")
+    return [part.strip() for part in cleaned.split(",") if part.strip()]
+
+
+def _normalize_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    without_marks = "".join(character for character in normalized if not unicodedata.combining(character))
+    return re.sub(r"\s+", " ", without_marks.casefold()).strip()
 
 
 def _municipality_code_to_name() -> dict[str, str]:

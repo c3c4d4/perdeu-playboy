@@ -34,6 +34,12 @@ Geometrias municipais: API de malhas do IBGE.
 
 - https://servicodados.ibge.gov.br/api/v3/malhas/estados/33
 
+Geometrias de bairros da cidade do Rio: serviço cartográfico da Prefeitura/Data.Rio.
+
+- https://pgeo3.rio.rj.gov.br/arcgis/rest/services/Cartografia/Limites_administrativos/FeatureServer/4
+
+No mapa, o município do Rio de Janeiro é desenhado por bairros, mas os valores vêm da CISP associada na tabela territorial do ISP. Isso reduz o acúmulo visual da capital sem sugerir que o ISP publique todos os indicadores por ocorrência/bairro exato.
+
 Fonte populacional para taxas municipais: IBGE/SIDRA.
 
 - https://sidra.ibge.gov.br/tabela/6579

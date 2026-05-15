@@ -5,11 +5,6 @@ import type { GeoFeatureCollection, Indicator, RankingMode } from "@/types/api";
 
 type Geometry = GeoJSON.Geometry;
 
-function formatNumber(value: unknown) {
-  const number = Number(value ?? 0);
-  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(number);
-}
-
 function polygonPath(ring: number[][], bbox: [number, number, number, number]) {
   const [minLon, minLat, maxLon, maxLat] = bbox;
   const width = maxLon - minLon || 1;
@@ -74,7 +69,6 @@ export function MunicipalityChoroplethPanel({
   const [indicator, setIndicator] = useState("letalidade_violenta");
   const [mode, setMode] = useState<RankingMode>("count");
   const [data, setData] = useState(initialData);
-  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,9 +93,8 @@ export function MunicipalityChoroplethPanel({
       const { getMapData } = await import("@/lib/api");
       const nextData = await getMapData(nextIndicator, nextMode, latestYear, latestMonth);
       setData(nextData);
-      setSelected(null);
     } catch {
-      setError("Falha ao carregar mapa municipal.");
+      setError("Falha ao carregar mapa.");
     } finally {
       setLoading(false);
     }
@@ -141,68 +134,37 @@ export function MunicipalityChoroplethPanel({
             }}
           >
             <option value="count">VALOR ABSOLUTO</option>
-            <option value="rate">TAXA 100 MIL</option>
             <option value="yoy">VARIAÇÃO ANUAL</option>
           </select>
         </label>
 
         <div className="flex items-end font-mono text-xs uppercase tracking-widest text-muted">
-          {loading ? "Carregando mapa..." : error ?? `Municípios: ${data.features.length}`}
+          {loading ? "Carregando mapa..." : error ?? `Recortes: ${data.features.length}`}
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="overflow-hidden border border-border bg-surface p-4 shadow-hard">
-          <svg viewBox="0 0 1000 680" role="img" aria-label="Mapa municipal do Rio de Janeiro" className="h-[360px] w-full sm:h-[500px] lg:h-[560px]">
-            <rect width="1000" height="680" fill="#050505" />
-            {data.features.map((feature) => {
-              const value = Number(feature.properties.metric_value ?? 0);
-              const name = String(feature.properties.territory_name ?? "");
-              return (
-                <path
-                  key={name}
-                  d={geometryPath(feature.geometry, bbox)}
-                  fill={color(value, maxMetric, mode)}
-                  stroke="#050505"
-                  strokeWidth="1.5"
-                  className="cursor-pointer transition-opacity hover:opacity-80"
-                  onMouseEnter={() => setSelected(feature.properties)}
-                  onFocus={() => setSelected(feature.properties)}
-                  tabIndex={0}
-                >
-                  <title>{name}</title>
-                </path>
-              );
-            })}
-          </svg>
-        </div>
-
-        <aside className="border border-border bg-surface p-5 shadow-hard">
-          <p className="font-mono text-xs font-bold uppercase tracking-widest text-muted">Município</p>
-          <h3 className="mt-2 text-3xl font-display uppercase leading-none text-foreground">
-            {String(selected?.territory_name ?? "Passe o mouse")}
-          </h3>
-          <dl className="mt-6 grid gap-4 font-mono text-xs uppercase tracking-wide">
-            <div className="border-t border-border pt-3">
-              <dt className="text-muted">Valor</dt>
-              <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.value)}</dd>
-            </div>
-            <div className="border-t border-border pt-3">
-              <dt className="text-muted">Taxa 100 mil</dt>
-              <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.rate_per_100k)}</dd>
-            </div>
-            <div className="border-t border-border pt-3">
-              <dt className="text-muted">Variação anual</dt>
-              <dd className={Number(selected?.yoy_percent_change ?? 0) > 0 ? "mt-1 text-lg font-bold text-accent-red" : "mt-1 text-lg font-bold text-foreground"}>
-                {formatNumber(selected?.yoy_percent_change)}%
-              </dd>
-            </div>
-            <div className="border-t border-border pt-3">
-              <dt className="text-muted">Rank</dt>
-              <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.rank)}</dd>
-            </div>
-          </dl>
-        </aside>
+      <div className="overflow-hidden border border-border bg-surface p-4 shadow-hard">
+        <svg viewBox="0 0 1000 680" role="img" aria-label="Mapa do Rio de Janeiro por municípios e bairros da capital" className="h-[420px] w-full sm:h-[560px] lg:h-[680px]">
+          <rect width="1000" height="680" fill="#050505" />
+          {data.features.map((feature) => {
+            const value = Number(feature.properties.metric_value ?? 0);
+            const name = String(feature.properties.territory_name ?? "");
+            const sourceName = String(feature.properties.source_territory_name ?? "");
+            return (
+              <path
+                key={`${name}-${sourceName}`}
+                d={geometryPath(feature.geometry, bbox)}
+                fill={color(value, maxMetric, mode)}
+                stroke="#050505"
+                strokeWidth="1.2"
+                className="cursor-pointer transition-opacity hover:opacity-80"
+                tabIndex={0}
+              >
+                <title>{sourceName ? `${name} · ${sourceName}` : name}</title>
+              </path>
+            );
+          })}
+        </svg>
       </div>
     </section>
   );
