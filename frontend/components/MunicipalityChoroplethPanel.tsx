@@ -6,6 +6,11 @@ import type { GeoFeatureCollection, Indicator, RankingMode } from "@/types/api";
 type Geometry = GeoJSON.Geometry;
 type MapView = "state" | "rio_city";
 
+function formatNumber(value: unknown) {
+  const number = Number(value ?? 0);
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(number);
+}
+
 function polygonPath(ring: number[][], bbox: [number, number, number, number]) {
   const [minLon, minLat, maxLon, maxLat] = bbox;
   const width = maxLon - minLon || 1;
@@ -71,6 +76,7 @@ export function MunicipalityChoroplethPanel({
   const [mode, setMode] = useState<RankingMode>("count");
   const [view, setView] = useState<MapView>("state");
   const [data, setData] = useState(initialData);
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +104,7 @@ export function MunicipalityChoroplethPanel({
           ? await getRioCityMapData(nextIndicator, nextMode, latestYear, latestMonth)
           : await getMapData(nextIndicator, nextMode, latestYear, latestMonth);
       setData(nextData);
+      setSelected(null);
     } catch {
       setError("Falha ao carregar mapa.");
     } finally {
@@ -164,35 +171,69 @@ export function MunicipalityChoroplethPanel({
       </div>
 
       <div className="overflow-hidden border border-border bg-surface p-4 shadow-hard">
-        <svg viewBox="0 0 1000 680" role="img" aria-label={view === "rio_city" ? "Mapa da cidade do Rio de Janeiro por bairros" : "Mapa do estado do Rio de Janeiro por municípios"} className="h-[420px] w-full sm:h-[560px] lg:h-[680px]">
-          <rect width="1000" height="680" fill="#050505" />
-          {data.features.map((feature) => {
-            const value = Number(feature.properties.metric_value ?? 0);
-            const name = String(feature.properties.territory_name ?? "");
-            const sourceName = String(feature.properties.source_territory_name ?? "");
-            const canOpenRio = view === "state" && name === "Rio de Janeiro";
-            return (
-              <path
-                key={`${name}-${sourceName}`}
-                d={geometryPath(feature.geometry, bbox)}
-                fill={color(value, maxMetric, mode)}
-                stroke="#050505"
-                strokeWidth={canOpenRio ? "2.4" : "1.2"}
-                className={canOpenRio ? "cursor-pointer transition-opacity hover:opacity-80" : "transition-opacity hover:opacity-80"}
-                onClick={canOpenRio ? openRioCity : undefined}
-                onKeyDown={(event) => {
-                  if (canOpenRio && (event.key === "Enter" || event.key === " ")) {
-                    event.preventDefault();
-                    openRioCity();
-                  }
-                }}
-                tabIndex={0}
-              >
-                <title>{canOpenRio ? "Rio de Janeiro · abrir bairros" : sourceName ? `${name} · ${sourceName}` : name}</title>
-              </path>
-            );
-          })}
-        </svg>
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <svg viewBox="0 0 1000 680" role="img" aria-label={view === "rio_city" ? "Mapa da cidade do Rio de Janeiro por bairros" : "Mapa do estado do Rio de Janeiro por municípios"} className="h-[420px] w-full sm:h-[560px] lg:h-[680px]">
+            <rect width="1000" height="680" fill="#050505" />
+            {data.features.map((feature) => {
+              const value = Number(feature.properties.metric_value ?? 0);
+              const name = String(feature.properties.territory_name ?? "");
+              const sourceName = String(feature.properties.source_territory_name ?? "");
+              const canOpenRio = view === "state" && name === "Rio de Janeiro";
+              return (
+                <path
+                  key={`${name}-${sourceName}`}
+                  d={geometryPath(feature.geometry, bbox)}
+                  fill={color(value, maxMetric, mode)}
+                  stroke="#050505"
+                  strokeWidth={canOpenRio ? "2.4" : "1.2"}
+                  className={canOpenRio ? "cursor-pointer transition-opacity hover:opacity-80" : "transition-opacity hover:opacity-80"}
+                  onMouseEnter={() => setSelected(feature.properties)}
+                  onFocus={() => setSelected(feature.properties)}
+                  onClick={canOpenRio ? openRioCity : undefined}
+                  onKeyDown={(event) => {
+                    if (canOpenRio && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      openRioCity();
+                    }
+                  }}
+                  tabIndex={0}
+                >
+                  <title>{canOpenRio ? "Rio de Janeiro · abrir bairros" : sourceName ? `${name} · ${sourceName}` : name}</title>
+                </path>
+              );
+            })}
+          </svg>
+
+          <aside className="border border-border bg-background p-5 shadow-hard">
+            <p className="font-mono text-xs font-bold uppercase tracking-widest text-muted">
+              {view === "rio_city" ? "Bairro" : "Município"}
+            </p>
+            <h3 className="mt-2 text-3xl font-display uppercase leading-none text-foreground">
+              {String(selected?.territory_name ?? "Passe o mouse")}
+            </h3>
+            {selected?.source_territory_name ? (
+              <p className="mt-2 font-mono text-xs uppercase tracking-wide text-muted">
+                {String(selected.source_territory_name)}
+              </p>
+            ) : null}
+            <dl className="mt-6 grid gap-4 font-mono text-xs uppercase tracking-wide">
+              <div className="border-t border-border pt-3">
+                <dt className="text-muted">Valor</dt>
+                <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.value)}</dd>
+              </div>
+              <div className="border-t border-border pt-3">
+                <dt className="text-muted">Variação anual</dt>
+                <dd className={Number(selected?.yoy_percent_change ?? 0) > 0 ? "mt-1 text-lg font-bold text-accent-red" : "mt-1 text-lg font-bold text-foreground"}>
+                  {formatNumber(selected?.yoy_percent_change)}%
+                </dd>
+              </div>
+              <div className="border-t border-border pt-3">
+                <dt className="text-muted">Rank</dt>
+                <dd className="mt-1 text-lg font-bold text-foreground">{formatNumber(selected?.rank)}</dd>
+              </div>
+            </dl>
+          </aside>
+        </div>
       </div>
     </section>
   );
