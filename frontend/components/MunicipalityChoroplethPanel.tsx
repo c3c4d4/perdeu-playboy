@@ -86,10 +86,10 @@ function periodsFrom(startYear: number, latestYear: number, latestMonth: number)
 
 function initialMapState(periods: Array<{ year: number; month: number }>): MapInitialState {
   if (typeof window === "undefined") {
-    return { indicator: "letalidade_violenta", mode: "rate", view: "state", periodIndex: periods.length - 1, uf: "RJ" };
+    return { indicator: "crime_geral", mode: "rate", view: "state", periodIndex: periods.length - 1, uf: "RJ" };
   }
   const params = new URLSearchParams(window.location.search);
-  const indicator = params.get("indicator") || "letalidade_violenta";
+  const indicator = params.get("indicator") || "crime_geral";
   const mode = params.get("mode") as RankingMode | null;
   const view = params.get("view") === "rio_city" ? "rio_city" : "state";
   const uf = enabledUf(params.get("uf") ?? window.localStorage.getItem("selected_uf"));

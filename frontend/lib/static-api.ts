@@ -186,11 +186,11 @@ export async function getRankings(
   if (cached) {
     return cached;
   }
-  const names = Object.keys(data.series[indicator]?.[territoryType] ?? {}).filter((name) => !isIgnoredTerritory(name));
+  const names = Object.keys((indicator === "crime_geral" ? data.series.letalidade_violenta : data.series[indicator])?.[territoryType] ?? {}).filter((name) => !isIgnoredTerritory(name));
   const rows = names.map((name): RankingRow => {
-    const values = valuesFor(indicator, territoryType, name, data);
-    const value = ytd(values, year, month);
-    const previous = ytd(values, year - 1, month);
+    const values = indicator === "crime_geral" ? [] : valuesFor(indicator, territoryType, name, data);
+    const value = indicator === "crime_geral" ? crimeGeneralYtd(territoryType, name, year, month, data) : ytd(values, year, month);
+    const previous = indicator === "crime_geral" ? crimeGeneralYtd(territoryType, name, year - 1, month, data) : ytd(values, year - 1, month);
     const diff = round1(value - previous);
     return {
       rank: 0,
@@ -455,6 +455,20 @@ function rollingCrimeValue(territoryType: TerritoryType, territoryName: string, 
     for (let index = start; index <= periodIndex; index += 1) {
       total += values[index] ?? 0;
     }
+  }
+  return round1(total);
+}
+
+function crimeGeneralYtd(
+  territoryType: TerritoryType,
+  territoryName: string,
+  year: number,
+  month: number,
+  data: StateSnapshot = DATA
+): number {
+  let total = 0;
+  for (const indicator of CRIME_RATE_INDICATORS) {
+    total += ytd(data.series[indicator]?.[territoryType]?.[territoryName] ?? [], year, month);
   }
   return round1(total);
 }

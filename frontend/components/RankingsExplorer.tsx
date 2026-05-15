@@ -8,6 +8,13 @@ import type { Indicator, RankingMode, RankingRow } from "@/types/api";
 
 type SortKey = "territory" | "value" | "trend" | "variation";
 type SortDirection = "asc" | "desc";
+const GENERAL_CRIME_INDICATOR: Indicator = {
+  code: "crime_geral",
+  name: "Crime geral",
+  category: "agregado",
+  unit: "ocorrências",
+  source_name: "snapshot"
+};
 
 export function RankingsExplorer({
   indicators,
@@ -18,8 +25,8 @@ export function RankingsExplorer({
   initialMunicipalityRows: RankingRow[];
   initialPoliceAreaRows: RankingRow[];
 }) {
-  const [indicator, setIndicator] = useState("letalidade_violenta");
-  const [indicatorOptions, setIndicatorOptions] = useState(indicators);
+  const [indicator, setIndicator] = useState("crime_geral");
+  const [indicatorOptions, setIndicatorOptions] = useState([GENERAL_CRIME_INDICATOR, ...indicators]);
   const [uf, setUf] = useState<UfCode>("RJ");
   const [mode, setMode] = useState<RankingMode>("rate");
   const [year, setYear] = useState(2026);
@@ -85,8 +92,9 @@ export function RankingsExplorer({
     setError(null);
     try {
       const { getIndicators, getLatestPeriod, getRankings } = await import("@/lib/api");
-      const [latest, nextIndicators] = await Promise.all([getLatestPeriod(nextUf), getIndicators(nextUf)]);
-      const nextIndicator = nextIndicators.some((item) => item.code === indicator) ? indicator : nextIndicators[0]?.code ?? "letalidade_violenta";
+      const [latest, nextRawIndicators] = await Promise.all([getLatestPeriod(nextUf), getIndicators(nextUf)]);
+      const nextIndicators = [GENERAL_CRIME_INDICATOR, ...nextRawIndicators];
+      const nextIndicator = nextIndicators.some((item) => item.code === indicator) ? indicator : "crime_geral";
       const [nextMunicipalityRows, nextPoliceAreaRows] = await Promise.all([
         getRankings(nextIndicator, mode, "municipality", latest.year, latest.month, nextUf),
         nextUf === "RJ" ? getRankings(nextIndicator, mode, "police_area", latest.year, latest.month, nextUf) : Promise.resolve([])
@@ -120,7 +128,7 @@ export function RankingsExplorer({
           <select className="h-10 border border-border bg-surface px-3 text-sm text-foreground" value={indicator} onChange={(event) => setIndicator(event.target.value)}>
             {indicatorOptions.map((item) => (
               <option key={item.code} value={item.code}>
-                {item.code === "letalidade_violenta" ? "LETALIDADE GERAL" : item.name.toUpperCase()}
+                {item.code === "crime_geral" ? "CRIME GERAL" : item.code === "letalidade_violenta" ? "LETALIDADE GERAL" : item.name.toUpperCase()}
               </option>
             ))}
           </select>
