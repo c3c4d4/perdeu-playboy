@@ -101,27 +101,29 @@ export async function getSummary(
   const latest = data.latest_period;
   const latestMonth = year === latest.year ? latest.month : 12;
   const resolvedName = resolveTerritoryName(territoryType, territoryName, data);
-  const cards = indicatorsWithData(data).map((indicator): SummaryCardData => {
+  const cards = indicatorsWithData(data).flatMap((indicator): SummaryCardData[] => {
     const values = valuesFor(indicator.code, territoryType, resolvedName, data);
     const current = ytd(values, year, latestMonth);
     const previous = ytd(values, year - 1, latestMonth);
     const historicalMin = historicalMinYtd(values, latestMonth, data);
+    if (previous <= 0 || !historicalMin) {
+      return [];
+    }
     const diff = round1(current - previous);
-    const pct = previous ? round1((diff / previous) * 100) : null;
-    const minValue = historicalMin?.value ?? null;
-    return {
+    const minValue = historicalMin.value;
+    return [{
       indicator: indicator.code,
       name: indicator.name,
       current_year_value: current,
       previous_year_same_period: previous,
       historical_min_same_period: minValue,
-      historical_min_year: historicalMin?.year ?? null,
-      historical_min_times_lower: minValue && minValue > 0 && current > 0 ? round1(current / minValue) : null,
+      historical_min_year: historicalMin.year,
+      historical_min_times_lower: minValue > 0 && current > 0 ? round1(current / minValue) : null,
       yoy_absolute_change: diff,
-      yoy_percent_change: pct,
+      yoy_percent_change: round1((diff / previous) * 100),
       latest_month: latestMonth,
       sparkline: yearValues(values, year, data)
-    };
+    }];
   });
 
   return {
